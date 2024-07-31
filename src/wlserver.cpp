@@ -85,6 +85,10 @@
 
 static LogScope wl_log("wlserver");
 
+using namespace std::literals;
+
+extern gamescope::ConVar<bool> cv_drm_debug_disable_explicit_sync;
+
 //#define GAMESCOPE_SWAPCHAIN_DEBUG
 
 struct wlserver_t wlserver = {
@@ -1439,6 +1443,10 @@ void wlserver_set_output_info( const wlserver_output_info *info )
 static bool filter_global(const struct wl_client *client, const struct wl_global *global, void *data)
 {
 	const struct wl_interface *iface = wl_global_get_interface(global);
+
+	if ( cv_drm_debug_disable_explicit_sync && iface->name == "wp_linux_drm_syncobj_manager_v1"sv )
+		return false;
+
 	if (strcmp(iface->name, wl_output_interface.name) != 0)
 		return true;
 
