@@ -1665,7 +1665,8 @@ bool MouseCursor::getTexture()
 	updateCursorFeedback();
 
 	if (m_imageEmpty) {
-
+		if ( GetBackend()->GetNestedHints() )
+			GetBackend()->GetNestedHints()->SetCursorImage( nullptr );
 		return false;
 	}
 
