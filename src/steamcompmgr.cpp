@@ -1866,6 +1866,8 @@ wlserver_vk_swapchain_feedback* steamcompmgr_get_base_layer_swapchain_feedback()
 	return &(*g_HeldCommits[ HELD_COMMIT_BASE ]->feedback);
 }
 
+gamescope::ConVar<bool> cv_paint_debug_pause_base_plane( "paint_debug_pause_base_plane", false, "Pause updates to the base plane." );
+
 static void
 paint_window(steamcompmgr_win_t *w, steamcompmgr_win_t *scaleW, struct FrameInfo_t *frameInfo,
 			  MouseCursor *cursor, PaintWindowFlags flags = 0, float flOpacityScale = 1.0f, steamcompmgr_win_t *fit = nullptr )
@@ -1880,7 +1882,7 @@ paint_window(steamcompmgr_win_t *w, steamcompmgr_win_t *scaleW, struct FrameInfo
 
 	if ( flags & PaintWindowFlag::BasePlane )
 	{
-		if ( lastCommit == nullptr )
+		if ( lastCommit == nullptr || cv_paint_debug_pause_base_plane )
 		{
 			// If we're the base plane and have no valid contents
 			// pick up that buffer we've been holding onto if we have one.
@@ -3876,12 +3878,15 @@ determine_and_apply_focus()
 		}
 	}
 
-	// Update last focus commit
-	if ( global_focus.focusWindow &&
-		 previous_focus.focusWindow != global_focus.focusWindow &&
-		 !global_focus.focusWindow->isSteamStreamingClient )
+	if ( !cv_paint_debug_pause_base_plane )
 	{
-		get_window_last_done_commit( global_focus.focusWindow, g_HeldCommits[ HELD_COMMIT_BASE ] );
+		// Update last focus commit
+		if ( global_focus.focusWindow &&
+			previous_focus.focusWindow != global_focus.focusWindow &&
+			!global_focus.focusWindow->isSteamStreamingClient )
+		{
+			get_window_last_done_commit( global_focus.focusWindow, g_HeldCommits[ HELD_COMMIT_BASE ] );
+		}
 	}
 
 	// Set SDL window title
@@ -5998,7 +6003,8 @@ bool handle_done_commit( steamcompmgr_win_t *w, xwayland_ctx_t *ctx, uint64_t co
 			// If this is the main plane, repaint
 			if ( w == global_focus.focusWindow && !w->isSteamStreamingClient )
 			{
-				g_HeldCommits[ HELD_COMMIT_BASE ] = w->commit_queue[ j ];
+				if ( !cv_paint_debug_pause_base_plane )
+					g_HeldCommits[ HELD_COMMIT_BASE ] = w->commit_queue[ j ];
 				hasRepaint = true;
 			}
 
@@ -6009,7 +6015,8 @@ bool handle_done_commit( steamcompmgr_win_t *w, xwayland_ctx_t *ctx, uint64_t co
 
 			if ( w->isSteamStreamingClientVideo && global_focus.focusWindow && global_focus.focusWindow->isSteamStreamingClient )
 			{
-				g_HeldCommits[ HELD_COMMIT_BASE ] = w->commit_queue[ j ];
+				if ( !cv_paint_debug_pause_base_plane )
+					g_HeldCommits[ HELD_COMMIT_BASE ] = w->commit_queue[ j ];
 				hasRepaint = true;
 			}
 
