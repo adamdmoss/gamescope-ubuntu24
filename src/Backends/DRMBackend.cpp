@@ -539,8 +539,7 @@ extern GamescopePanelOrientation g_DesiredInternalOrientation;
 
 extern bool g_bForceDisableColorMgmt;
 
-static LogScope drm_log("drm");
-static LogScope drm_verbose_log("drm", LOG_SILENT);
+static LogScope drm_log( "drm" );
 
 static std::unordered_map< std::string, std::string > pnps = {};
 
@@ -700,7 +699,7 @@ static void page_flip_handler(int fd, unsigned int frame, unsigned int sec, unsi
 
 	// TODO: get the fbids_queued instance from data if we ever have more than one in flight
 
-	drm_verbose_log.debugf("page_flip_handler %" PRIu64, pCtx->ulPendingFlipCount);
+	drm_log.debugf("page_flip_handler %" PRIu64, pCtx->ulPendingFlipCount);
 	gpuvis_trace_printf("page_flip_handler %" PRIu64, pCtx->ulPendingFlipCount);
 
 	{
@@ -1423,7 +1422,7 @@ gamescope::OwningRc<gamescope::IBackendFb> drm_fbid_from_dmabuf( struct drm_t *d
 
 	if ( !wlr_drm_format_set_has( &drm->formats, dma_buf->format, dma_buf->modifier ) )
 	{
-		drm_verbose_log.errorf( "Cannot import FB to DRM: format 0x%" PRIX32 " and modifier 0x%" PRIX64 " not supported for scan-out", dma_buf->format, dma_buf->modifier );
+		drm_log.errorf( "Cannot import FB to DRM: format 0x%" PRIX32 " and modifier 0x%" PRIX64 " not supported for scan-out", dma_buf->format, dma_buf->modifier );
 		return nullptr;
 	}
 
@@ -1463,7 +1462,7 @@ gamescope::OwningRc<gamescope::IBackendFb> drm_fbid_from_dmabuf( struct drm_t *d
 		}
 	}
 
-	drm_verbose_log.debugf("make fbid %u", fb_id);
+	drm_log.debugf("make fbid %u", fb_id);
 
 	pBackendFb = new gamescope::CDRMFb( fb_id, buf );
 
@@ -2369,7 +2368,7 @@ drm_prepare_liftoff( struct drm_t *drm, const struct FrameInfo_t *frameInfo, boo
 
 			if ( pDrmFb == nullptr )
 			{
-				drm_verbose_log.errorf("drm_prepare_liftoff: layer %d has no FB", i );
+				drm_log.debugf("drm_prepare_liftoff: layer %d has no FB", i );
 				return -EINVAL;
 			}
 
@@ -2575,9 +2574,9 @@ drm_prepare_liftoff( struct drm_t *drm, const struct FrameInfo_t *frameInfo, boo
 	}
 
 	if ( ret == 0 )
-		drm_verbose_log.debugf( "can drm present %i layers", frameInfo->layerCount );
+		drm_log.debugf( "can drm present %i layers", frameInfo->layerCount );
 	else
-		drm_verbose_log.debugf( "can NOT drm present %i layers", frameInfo->layerCount );
+		drm_log.debugf( "can NOT drm present %i layers", frameInfo->layerCount );
 
 	return ret;
 }
@@ -3654,7 +3653,7 @@ namespace gamescope
 			m_uNextPresentCtx = ( m_uNextPresentCtx + 1 ) % 3;
 			m_PresentCtxs[uCurrentPresentCtx].ulPendingFlipCount = m_PresentFeedback.m_uQueuedPresents;
 
-			drm_verbose_log.debugf("flip commit %" PRIu64, (uint64_t)m_PresentFeedback.m_uQueuedPresents);
+			drm_log.debugf("flip commit %" PRIu64, (uint64_t)m_PresentFeedback.m_uQueuedPresents);
 			gpuvis_trace_printf( "flip commit %" PRIu64, (uint64_t)m_PresentFeedback.m_uQueuedPresents );
 
 			ret = drmModeAtomicCommit(drm->fd, drm->req, drm->flags, &m_PresentCtxs[uCurrentPresentCtx] );

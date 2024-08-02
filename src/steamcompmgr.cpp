@@ -7048,9 +7048,9 @@ static std::vector<uint32_t> s_uRelativeMouseFilteredAppids;
 static gamescope::ConVar<std::string> cv_mouse_relative_filter_appids( "mouse_relative_filter_appids",
 "8400" /* Geometry Wars: Retro Evolved */,
 "Comma separated appids to filter out using relative mouse mode for.",
-[]()
+[]( gamescope::ConVar<std::string> &cvar )
 {
-	std::vector<std::string_view> sFilterAppids = gamescope::Split( cv_mouse_relative_filter_appids, "," );
+	std::vector<std::string_view> sFilterAppids = gamescope::Split( cvar, "," );
 	std::vector<uint32_t> uFilterAppids;
 	uFilterAppids.reserve( sFilterAppids.size() );
 	for ( auto &sFilterAppid : sFilterAppids )
