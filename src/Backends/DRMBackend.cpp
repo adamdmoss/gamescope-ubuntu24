@@ -482,7 +482,7 @@ struct drm_t {
 	std::mutex m_mutVisibleFbIds;
 	std::vector<gamescope::Rc<gamescope::IBackendFb>> m_VisibleFbIds;
 
-	std::atomic < bool > bPendingFlip = { false };
+	std::atomic < uint32_t > uPendingFlipCount = { 0 };
 
 	std::atomic < bool > paused = { false };
 	std::atomic < int > out_of_date = { false };
@@ -714,8 +714,8 @@ static void page_flip_handler(int fd, unsigned int frame, unsigned int sec, unsi
 		g_DRM.m_QueuedFbIds.clear();
 	}
 
-	g_DRM.bPendingFlip = false;
-	g_DRM.bPendingFlip.notify_all();
+	g_DRM.uPendingFlipCount--;
+	g_DRM.uPendingFlipCount.notify_all();
 
 	mangoapp_output_update( vblanktime );
 
@@ -3640,10 +3640,11 @@ namespace gamescope
 			defer( if ( drm->req != nullptr ) { drmModeAtomicFree( drm->req ); drm->req = nullptr; } );
 
 			bool isPageFlip = drm->flags & DRM_MODE_PAGE_FLIP_EVENT;
+			uint32_t uNewPendingFlipCount = 0;
 
 			if ( isPageFlip )
 			{
-				drm->bPendingFlip = true;
+				uNewPendingFlipCount = ++drm->uPendingFlipCount;
 
 				// Do it before the commit, as otherwise the pageflip handler could
 				// potentially beat us to the refcount checks.
@@ -3671,7 +3672,7 @@ namespace gamescope
 				{
 					drm_log.errorf( "fatal flip error, aborting" );
 					if ( isPageFlip )
-						drm->bPendingFlip = false;
+						drm->uPendingFlipCount--;
 					abort();
 				}
 
@@ -3689,7 +3690,7 @@ namespace gamescope
 				m_PresentFeedback.m_uQueuedPresents--;
 
 				if ( isPageFlip )
-					drm->bPendingFlip = false;
+					drm->uPendingFlipCount--;
 
 				return ret;
 			} else {
@@ -3738,7 +3739,8 @@ namespace gamescope
 			if ( isPageFlip )
 			{
 				// Wait for bPendingFlip to change from true -> false.
-				drm->bPendingFlip.wait( true );
+				drm->uPendingFlipCount.wait( uNewPendingFlipCount );
+				assert( drm->uPendingFlipCount == 0 );
 			}
 
 			return ret;
