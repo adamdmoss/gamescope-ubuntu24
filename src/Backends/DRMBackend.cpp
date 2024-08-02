@@ -479,13 +479,14 @@ struct drm_t {
 	std::vector<gamescope::Rc<gamescope::IBackendFb>> m_QueuedFbIds;
 	// FBs currently on screen.
 	// Accessed only on page flip handler thread.
+	std::mutex m_mutVisibleFbIds;
 	std::vector<gamescope::Rc<gamescope::IBackendFb>> m_VisibleFbIds;
 
-	std::mutex flip_lock;
+	std::atomic < bool > bPendingFlip = { false };
 
-	std::atomic < bool > paused;
-	std::atomic < int > out_of_date;
-	std::atomic < bool > needs_modeset;
+	std::atomic < bool > paused = { false };
+	std::atomic < int > out_of_date = { false };
+	std::atomic < bool > needs_modeset = { false };
 
 	std::unordered_map< std::string, int > connector_priorities;
 
@@ -693,23 +694,28 @@ static void page_flip_handler(int fd, unsigned int frame, unsigned int sec, unsi
 	if ( g_DRM.pCRTC->GetObjectId() != crtc_id )
 		return;
 
+	static uint64_t ulLastVBlankTime = 0;
+
 	// This is the last vblank time
 	uint64_t vblanktime = sec * 1'000'000'000lu + usec * 1'000lu;
 	GetVBlankTimer().MarkVBlank( vblanktime, true );
 
 	// TODO: get the fbids_queued instance from data if we ever have more than one in flight
 
-	drm_log.debugf("page_flip_handler %" PRIu64, pCtx->ulPendingFlipCount);
+	drm_log.debugf("page_flip_handler %" PRIu64 " delta: %" PRIu64, pCtx->ulPendingFlipCount, vblanktime - ulLastVBlankTime );
 	gpuvis_trace_printf("page_flip_handler %" PRIu64, pCtx->ulPendingFlipCount);
 
+	ulLastVBlankTime = vblanktime;
+
 	{
-		std::unique_lock lock( g_DRM.m_QueuedFbIdsMutex );
+		std::scoped_lock lock{ g_DRM.m_QueuedFbIdsMutex, g_DRM.m_mutVisibleFbIds };
 		// Swap and clear from queue -> visible to avoid allocations.
 		g_DRM.m_VisibleFbIds.swap( g_DRM.m_QueuedFbIds );
 		g_DRM.m_QueuedFbIds.clear();
 	}
 
-	g_DRM.flip_lock.unlock();
+	g_DRM.bPendingFlip = false;
+	g_DRM.bPendingFlip.notify_all();
 
 	mangoapp_output_update( vblanktime );
 
@@ -1399,7 +1405,7 @@ void finish_drm(struct drm_t *drm)
 		drm->m_QueuedFbIds.clear();
 	}
 	{
-		std::unique_lock lock( drm->flip_lock );
+		std::unique_lock lock( drm->m_mutVisibleFbIds );
 		drm->m_VisibleFbIds.clear();
 	}
 	drm->sdr_static_metadata = nullptr;
@@ -3637,7 +3643,7 @@ namespace gamescope
 
 			if ( isPageFlip )
 			{
-				drm->flip_lock.lock();
+				drm->bPendingFlip = true;
 
 				// Do it before the commit, as otherwise the pageflip handler could
 				// potentially beat us to the refcount checks.
@@ -3665,7 +3671,7 @@ namespace gamescope
 				{
 					drm_log.errorf( "fatal flip error, aborting" );
 					if ( isPageFlip )
-						drm->flip_lock.unlock();
+						drm->bPendingFlip = false;
 					abort();
 				}
 
@@ -3683,7 +3689,7 @@ namespace gamescope
 				m_PresentFeedback.m_uQueuedPresents--;
 
 				if ( isPageFlip )
-					drm->flip_lock.unlock();
+					drm->bPendingFlip = false;
 
 				return ret;
 			} else {
@@ -3731,9 +3737,8 @@ namespace gamescope
 
 			if ( isPageFlip )
 			{
-				// Wait for flip handler to unlock
-				drm->flip_lock.lock();
-				drm->flip_lock.unlock();
+				// Wait for bPendingFlip to change from true -> false.
+				drm->bPendingFlip.wait( true );
 			}
 
 			return ret;
