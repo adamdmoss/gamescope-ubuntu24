@@ -13,6 +13,9 @@
 #include <unordered_map>
 #include <optional>
 
+#include "WaylandServer/WaylandDecls.h"
+#include "WaylandServer/WaylandServerLegacy.h"
+
 #include <pixman-1/pixman.h>
 
 #include "vulkan_include.h"
@@ -27,18 +30,6 @@
 
 struct _XDisplay;
 struct xwayland_ctx_t;
-
-struct wlserver_vk_swapchain_feedback
-{
-	uint32_t image_count;
-	VkFormat vk_format;
-	VkColorSpaceKHR vk_colorspace;
-	VkCompositeAlphaFlagBitsKHR vk_composite_alpha;
-	VkSurfaceTransformFlagBitsKHR vk_pre_transform;
-	VkBool32 vk_clipped;
-
-	std::shared_ptr<gamescope::BackendBlob> hdr_metadata_blob;
-};
 
 struct GamescopeAcquireTimelineState
 {
@@ -276,28 +267,6 @@ void wlserver_set_output_info( const wlserver_output_info *info );
 gamescope_xwayland_server_t *wlserver_get_xwayland_server( size_t index );
 const char *wlserver_get_wl_display_name( void );
 
-struct wlserver_wl_surface_info
-{
-	wlserver_x11_surface_info *x11_surface = nullptr;
-	wlserver_xdg_surface_info *xdg_surface = nullptr;
-
-
-	struct wlr_surface *wlr = nullptr;
-	struct wl_listener commit;
-	struct wl_listener destroy;
-
-	std::shared_ptr<wlserver_vk_swapchain_feedback> swapchain_feedback = {};
-	std::optional<VkPresentModeKHR> oCurrentPresentMode;
-
-	uint64_t sequence = 0;
-	std::vector<struct wl_resource*> pending_presentation_feedbacks;
-
-	std::vector<struct wl_resource *> gamescope_swapchains;
-	std::optional<uint32_t> present_id = std::nullopt;
-	uint64_t desired_present_time = 0;
-
-	uint64_t last_refresh_cycle = 0;
-};
 wlserver_wl_surface_info *get_wl_surface_info(struct wlr_surface *wlr_surf);
 
 void wlserver_x11_surface_info_init( struct wlserver_x11_surface_info *surf, gamescope_xwayland_server_t *server, uint32_t x11_id );
