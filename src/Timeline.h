@@ -18,6 +18,7 @@ namespace gamescope
     class CTimeline : public NonCopyable
     {
     public:
+        CTimeline( int32_t nSyncobjFd );
         CTimeline( int32_t nSyncobjFd, uint32_t uSyncobjHandle );
 
         CTimeline( CTimeline &&other )
@@ -27,7 +28,11 @@ namespace gamescope
         }
         ~CTimeline();
 
-        int32_t GetDrmRenderFD() const;
+        static std::shared_ptr<CTimeline> CreateFromSyncobjFd( int32_t nSyncobjFd );
+
+        static int32_t GetDrmRenderFD();
+
+        bool IsValid() const { return m_uSyncobjHandle != 0; }
 
         int32_t GetSyncobjFd() const { return m_nSyncobjFd; }
         uint32_t GetSyncobjHandle() const { return m_uSyncobjHandle; }
