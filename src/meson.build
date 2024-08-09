@@ -111,6 +111,7 @@ src = [
   'log.cpp',
   'ime.cpp',
   'mangoapp.cpp',
+  'Timeline.cpp',
   'reshade_effect_manager.cpp',
   'backend.cpp',
   'x11cursor.cpp',
