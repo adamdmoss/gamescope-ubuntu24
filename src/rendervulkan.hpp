@@ -938,7 +938,7 @@ private:
 	uint32_t m_renderBufferOffset = 0;
 };
 
-uint32_t VulkanFormatToDRM( VkFormat vkFormat );
+uint32_t VulkanFormatToDRM( VkFormat vkFormat, std::optional<bool> obHasAlphaOverride = std::nullopt );
 VkFormat DRMFormatToVulkan( uint32_t nDRMFormat, bool bSrgb );
 bool DRMFormatHasAlpha( uint32_t nDRMFormat );
 uint32_t DRMFormatGetBPP( uint32_t nDRMFormat );
