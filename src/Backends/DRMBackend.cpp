@@ -415,7 +415,7 @@ namespace gamescope
 	class CDRMFb final : public CBaseBackendFb
 	{
 	public:
-		CDRMFb( uint32_t uFbId, wlr_buffer *pClientBuffer );
+		CDRMFb( uint32_t uFbId );
 		~CDRMFb();
 
 		uint32_t GetFbId() const { return m_uFbId; }
@@ -1473,7 +1473,7 @@ gamescope::OwningRc<gamescope::IBackendFb> drm_fbid_from_dmabuf( struct drm_t *d
 
 	drm_log.debugf("make fbid %u", fb_id);
 
-	pBackendFb = new gamescope::CDRMFb( fb_id, buf );
+	pBackendFb = new gamescope::CDRMFb( fb_id );
 
 out:
 	for ( int i = 0; i < dma_buf->n_planes; i++ ) {
@@ -2334,9 +2334,8 @@ namespace gamescope
 	/////////////////////////
 	// CDRMFb
 	/////////////////////////
-	CDRMFb::CDRMFb( uint32_t uFbId, wlr_buffer *pClientBuffer )
-		: CBaseBackendFb( pClientBuffer )
-		, m_uFbId{ uFbId }
+	CDRMFb::CDRMFb( uint32_t uFbId )
+		: m_uFbId{ uFbId }
 	{
 
 	}

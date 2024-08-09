@@ -46,8 +46,8 @@ struct ResListEntry_t {
 	std::vector<struct wl_resource*> presentation_feedbacks;
 	std::optional<uint32_t> present_id;
 	uint64_t desired_present_time;
-	std::optional<GamescopeAcquireTimelineState> oAcquireState;
-	std::optional<GamescopeTimelinePoint> oReleasePoint;
+	std::shared_ptr<gamescope::CAcquireTimelinePoint> pAcquirePoint;
+	std::shared_ptr<gamescope::CReleaseTimelinePoint> pReleasePoint;
 };
 
 struct wlserver_content_override;
@@ -116,7 +116,6 @@ struct wlserver_t {
 		struct wlr_compositor *compositor;
 		struct wlr_session *session;
 		struct wlr_seat *seat;
-		struct wlr_linux_drm_syncobj_manager_v1 *drm_syncobj_manager_v1;
 
 		// Used to simulate key events and set the keymap
 		struct wlr_keyboard *virtual_keyboard_device;
@@ -266,8 +265,6 @@ void wlserver_set_output_info( const wlserver_output_info *info );
 
 gamescope_xwayland_server_t *wlserver_get_xwayland_server( size_t index );
 const char *wlserver_get_wl_display_name( void );
-
-wlserver_wl_surface_info *get_wl_surface_info(struct wlr_surface *wlr_surf);
 
 void wlserver_x11_surface_info_init( struct wlserver_x11_surface_info *surf, gamescope_xwayland_server_t *server, uint32_t x11_id );
 void wlserver_x11_surface_info_finish( struct wlserver_x11_surface_info *surf );

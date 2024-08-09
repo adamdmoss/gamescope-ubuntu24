@@ -1208,8 +1208,19 @@ static steamcompmgr_win_t * find_win( xwayland_ctx_t *ctx, struct wlr_surface *s
 
 static gamescope::CBufferMemoizer s_BufferMemos;
 
+// This really needs cleanup, this function is so silly...
 static gamescope::Rc<commit_t>
-import_commit ( steamcompmgr_win_t *w, struct wlr_surface *surf, struct wlr_buffer *buf, bool async, std::shared_ptr<wlserver_vk_swapchain_feedback> swapchain_feedback, std::vector<struct wl_resource*> presentation_feedbacks, std::optional<uint32_t> present_id, uint64_t desired_present_time, bool fifo, std::optional<GamescopeTimelinePoint> oReleasePoint )
+import_commit (
+	steamcompmgr_win_t *w,
+	struct wlr_surface *surf,
+	struct wlr_buffer *buf,
+	bool async,
+	std::shared_ptr<wlserver_vk_swapchain_feedback> swapchain_feedback,
+	std::vector<struct wl_resource*> presentation_feedbacks,
+	std::optional<uint32_t> present_id,
+	uint64_t desired_present_time,
+	bool fifo,
+	std::shared_ptr<gamescope::CReleaseTimelinePoint> pReleasePoint )
 {
 	gamescope::Rc<commit_t> commit = new commit_t;
 
@@ -1227,13 +1238,16 @@ import_commit ( steamcompmgr_win_t *w, struct wlr_surface *surf, struct wlr_buff
 
 	if ( gamescope::OwningRc<CVulkanTexture> pTexture = s_BufferMemos.LookupVulkanTexture( buf ) )
 	{
-		if ( oReleasePoint )
+		gamescope::IBackendFb *pBackendFb = pTexture->GetBackendFb();
+
+		if ( pBackendFb )
 		{
-			if ( gamescope::IBackendFb *pBackendFb = pTexture->GetBackendFb() )
-			{
-				pBackendFb->SetReleasePoint( *oReleasePoint );
-			}
+			if ( pReleasePoint )	
+				pBackendFb->SetReleasePoint( pReleasePoint );
+			else
+				pBackendFb->SetBuffer( buf );
 		}
+
 		// Going from OwningRc -> Rc now.
 		commit->vulkanTex = pTexture;
 		return commit;
@@ -1246,8 +1260,13 @@ import_commit ( steamcompmgr_win_t *w, struct wlr_surface *surf, struct wlr_buff
 		pBackendFb = GetBackend()->ImportDmabufToBackend( buf, &dmabuf );
 	}
 
-	if ( pBackendFb && oReleasePoint )
-		pBackendFb->SetReleasePoint( *oReleasePoint );
+	if ( pBackendFb )
+	{
+		if (pReleasePoint )
+			pBackendFb->SetReleasePoint( pReleasePoint );
+		else
+			pBackendFb->SetBuffer( buf );
+	}
 	gamescope::OwningRc<CVulkanTexture> pOwnedTexture = vulkan_create_texture_from_wlr_buffer( buf, std::move( pBackendFb ) );
 	commit->vulkanTex = pOwnedTexture;
 
@@ -6285,7 +6304,17 @@ void update_wayland_res(CommitDoneList_t *doneCommits, steamcompmgr_win_t *w, Re
 		return;
 	}
 
-	gamescope::Rc<commit_t> newCommit = import_commit( w, reslistentry.surf, buf, reslistentry.async, std::move(reslistentry.feedback), std::move(reslistentry.presentation_feedbacks), reslistentry.present_id, reslistentry.desired_present_time, reslistentry.fifo, std::move( reslistentry.oReleasePoint ) );
+	gamescope::Rc<commit_t> newCommit = import_commit(
+		w,
+		reslistentry.surf,
+		buf,
+		reslistentry.async,
+		std::move(reslistentry.feedback),
+		std::move(reslistentry.presentation_feedbacks),
+		reslistentry.present_id,
+		reslistentry.desired_present_time,
+		reslistentry.fifo,
+		std::move( reslistentry.pReleasePoint ) );
 
 	int fence = -1;
 	if ( newCommit != nullptr )
@@ -6295,17 +6324,11 @@ void update_wayland_res(CommitDoneList_t *doneCommits, steamcompmgr_win_t *w, Re
 									( global_focus.focusWindow && global_focus.focusWindow->isSteamStreamingClient && w->isSteamStreamingClientVideo );
 
 		bool bKnownReady = false;
-		if ( reslistentry.oAcquireState )
+		if ( reslistentry.pAcquirePoint )
 		{
-			if ( reslistentry.oAcquireState->bKnownReady )
-			{
-				fence = -1;
-				bKnownReady = true;
-			}
-			else
-			{
-				fence = reslistentry.oAcquireState->nEventFd;
-			}
+			std::pair<int32_t, bool> eventFd = reslistentry.pAcquirePoint->CreateEventFd();
+			fence = eventFd.first;
+			bKnownReady = eventFd.second;
 		}
 		else
 		{

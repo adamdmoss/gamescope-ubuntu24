@@ -1,6 +1,7 @@
 #pragma once
 
 #include <wayland-server-core.h>
+#include "WaylandDecls.h"
 #include <memory>
 #include <optional>
 #include <vector>
@@ -37,6 +38,8 @@ struct wlserver_wl_surface_info
 {
 	wlserver_x11_surface_info *x11_surface = nullptr;
 	wlserver_xdg_surface_info *xdg_surface = nullptr;
+
+	gamescope::WaylandServer::CLinuxDrmSyncobjSurface *pSyncobjSurface = nullptr;
 
 	struct wlr_surface *wlr = nullptr;
 	struct wl_listener commit;
