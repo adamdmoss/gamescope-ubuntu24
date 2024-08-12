@@ -2554,6 +2554,14 @@ uint32_t CVulkanTexture::DecRef()
 	return uRefCount;
 }
 
+bool CVulkanTexture::IsInUse()
+{
+	if ( m_pBackendFb && m_pBackendFb->GetRefCount() != 0 )
+		return true;
+
+	return GetRefCount() != 0;
+}
+
 CVulkanTexture::CVulkanTexture( void )
 {
 }

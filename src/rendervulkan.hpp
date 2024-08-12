@@ -162,6 +162,8 @@ public:
 	uint32_t IncRef();
 	uint32_t DecRef();
 
+	bool IsInUse();
+
 	inline VkImageView view( bool linear ) { return linear ? m_linearView : m_srgbView; }
 	inline VkImageView linearView() { return m_linearView; }
 	inline VkImageView srgbView() { return m_srgbView; }
