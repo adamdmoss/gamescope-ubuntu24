@@ -923,6 +923,12 @@ public:
 	VkQueue queue() { return m_queue; }
 	uint32_t queueFamily() { return m_queueFamily; }
 
+	void AddDependency( std::shared_ptr<VulkanTimelineSemaphore_t> pTimelineSemaphore, uint64_t ulPoint );
+	void AddSignal( std::shared_ptr<VulkanTimelineSemaphore_t> pTimelineSemaphore, uint64_t ulPoint );
+
+	const std::vector<VulkanTimelinePoint_t> &GetExternalDependencies() const { return m_ExternalDependencies; }
+	const std::vector<VulkanTimelinePoint_t> &GetExternalSignals() const { return m_ExternalSignals; }
+
 private:
 	VkCommandBuffer m_cmdBuffer;
 	CVulkanDevice *m_device;
@@ -942,6 +948,9 @@ private:
 
 	std::array<CVulkanTexture *, VKR_LUT3D_COUNT> m_shaperLut;
 	std::array<CVulkanTexture *, VKR_LUT3D_COUNT> m_lut3D;
+
+	std::vector<VulkanTimelinePoint_t> m_ExternalDependencies;
+	std::vector<VulkanTimelinePoint_t> m_ExternalSignals;
 
 	uint32_t m_renderBufferOffset = 0;
 };

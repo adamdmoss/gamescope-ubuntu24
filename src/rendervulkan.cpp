@@ -1240,13 +1240,36 @@ uint64_t CVulkanDevice::submitInternal( CVulkanCmdBuffer* cmdBuffer )
 	// This is the seq no of the command buffer we are going to submit.
 	const uint64_t nextSeqNo = lastSubmissionSeqNo + 1;
 
+	std::vector<VkSemaphore> pSignalSemaphores;
+	std::vector<uint64_t> ulSignalPoints;
+
+	std::vector<VkPipelineStageFlags> uWaitStageFlags;
+	std::vector<VkSemaphore> pWaitSemaphores;
+	std::vector<uint64_t> ulWaitPoints;
+
+	pSignalSemaphores.push_back( m_scratchTimelineSemaphore );
+	ulSignalPoints.push_back( nextSeqNo );
+
+	for ( auto &dep : cmdBuffer->GetExternalSignals() )
+	{
+		pSignalSemaphores.push_back( dep.pTimelineSemaphore->pVkSemaphore );
+		ulSignalPoints.push_back( dep.ulPoint );
+	}
+
+	for ( auto &dep : cmdBuffer->GetExternalDependencies() )
+	{
+		pWaitSemaphores.push_back( dep.pTimelineSemaphore->pVkSemaphore );
+		ulWaitPoints.push_back( dep.ulPoint );
+		uWaitStageFlags.push_back( VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT );
+	}
+
 	VkTimelineSemaphoreSubmitInfo timelineInfo = {
 		.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO,
 		// no need to ensure order of cmd buffer submission, we only have one queue
-		.waitSemaphoreValueCount = 0,
-		.pWaitSemaphoreValues = nullptr,
-		.signalSemaphoreValueCount = 1,
-		.pSignalSemaphoreValues = &nextSeqNo,
+		.waitSemaphoreValueCount = static_cast<uint32_t>( ulWaitPoints.size() ),
+		.pWaitSemaphoreValues = ulWaitPoints.data(),
+		.signalSemaphoreValueCount = static_cast<uint32_t>( ulSignalPoints.size() ),
+		.pSignalSemaphoreValues = ulSignalPoints.data(),
 	};
 
 	VkCommandBuffer rawCmdBuffer = cmdBuffer->rawBuffer();
@@ -1254,10 +1277,13 @@ uint64_t CVulkanDevice::submitInternal( CVulkanCmdBuffer* cmdBuffer )
 	VkSubmitInfo submitInfo = {
 		.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
 		.pNext = &timelineInfo,
+		.waitSemaphoreCount = static_cast<uint32_t>( pWaitSemaphores.size() ),
+		.pWaitSemaphores = pWaitSemaphores.data(),
+		.pWaitDstStageMask = uWaitStageFlags.data(),
 		.commandBufferCount = 1,
 		.pCommandBuffers = &rawCmdBuffer,
-		.signalSemaphoreCount = 1,
-		.pSignalSemaphores = &m_scratchTimelineSemaphore,
+		.signalSemaphoreCount = static_cast<uint32_t>( pSignalSemaphores.size() ),
+		.pSignalSemaphores = pSignalSemaphores.data(),
 	};
 
 	vk_check( vk.QueueSubmit( cmdBuffer->queue(), 1, &submitInfo, VK_NULL_HANDLE ) );
@@ -1394,6 +1420,16 @@ std::shared_ptr<VulkanTimelineSemaphore_t> CVulkanDevice::ImportTimelineSemaphor
 	return pSemaphore;
 }
 
+void CVulkanCmdBuffer::AddDependency( std::shared_ptr<VulkanTimelineSemaphore_t> pTimelineSemaphore, uint64_t ulPoint )
+{
+	m_ExternalDependencies.emplace_back( std::move( pTimelineSemaphore ), ulPoint );
+}
+
+void CVulkanCmdBuffer::AddSignal( std::shared_ptr<VulkanTimelineSemaphore_t> pTimelineSemaphore, uint64_t ulPoint )
+{
+	m_ExternalSignals.emplace_back( std::move( pTimelineSemaphore ), ulPoint );
+}
+
 void CVulkanDevice::wait(uint64_t sequence, bool reset)
 {
 	if (m_submissionSeqNo == sequence)
@@ -1449,6 +1485,9 @@ void CVulkanCmdBuffer::reset()
 	vk_check( m_device->vk.ResetCommandBuffer(m_cmdBuffer, 0) );
 	m_textureRefs.clear();
 	m_textureState.clear();
+
+	m_ExternalDependencies.clear();
+	m_ExternalSignals.clear();
 }
 
 void CVulkanCmdBuffer::begin()
