@@ -18,6 +18,7 @@ namespace gamescope
     class CTimeline : public NonCopyable
     {
     public:
+        // Inherits nSyncobjFd's ref.
         CTimeline( int32_t nSyncobjFd );
         CTimeline( int32_t nSyncobjFd, uint32_t uSyncobjHandle );
 
@@ -52,6 +53,7 @@ namespace gamescope
         ~CTimelinePoint();
 
         void SetPoint( uint64_t ulPoint ) { m_ulPoint = ulPoint; }
+        uint64_t GetPoint() const { return m_ulPoint; }
 
               std::shared_ptr<CTimeline> &GetTimeline()       { return m_pTimeline; }
         const std::shared_ptr<CTimeline> &GetTimeline() const { return m_pTimeline; }
