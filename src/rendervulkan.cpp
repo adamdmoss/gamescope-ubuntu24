@@ -1280,18 +1280,6 @@ void CVulkanDevice::garbageCollect( void )
 
 VulkanTimelineSemaphore_t::~VulkanTimelineSemaphore_t()
 {
-	if ( uHandle != 0 )
-	{
-		drmSyncobjDestroy( pDevice->drmRenderFd(), uHandle );
-		uHandle = 0;
-	}
-
-	if ( nFd >= 0 )
-	{
-		close( nFd );
-		nFd = -1;
-	}
-
 	if ( pVkSemaphore != VK_NULL_HANDLE )
 	{
 		pDevice->vk.DestroySemaphore( pDevice->device(), pVkSemaphore, nullptr );
@@ -1299,67 +1287,66 @@ VulkanTimelineSemaphore_t::~VulkanTimelineSemaphore_t()
 	}
 }
 
-std::shared_ptr<VulkanTimelineSemaphore_t> CVulkanDevice::CreateTimelineSemaphore( uint64_t ulStartPoint )
+int VulkanTimelineSemaphore_t::GetFd() const
+{
+	const VkSemaphoreGetFdInfoKHR semaphoreGetInfo =
+	{
+		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_GET_FD_INFO_KHR,
+		.semaphore = pVkSemaphore,
+		.handleType = VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_OPAQUE_FD_BIT,
+	};
+
+	int32_t nFd = -1;
+	VkResult res = VK_SUCCESS;
+	if ( ( res = pDevice->vk.GetSemaphoreFdKHR( pDevice->device(), &semaphoreGetInfo, &nFd ) ) != VK_SUCCESS )
+	{
+		vk_errorf( res, "vkGetSemaphoreFdKHR failed" );
+		return -1;
+	}
+
+	return nFd;
+}
+
+std::shared_ptr<VulkanTimelineSemaphore_t> CVulkanDevice::CreateTimelineSemaphore( uint64_t ulStartPoint, bool bShared )
 {
 	std::shared_ptr<VulkanTimelineSemaphore_t> pSemaphore = std::make_unique<VulkanTimelineSemaphore_t>();
 	pSemaphore->pDevice = this;
 
-	const VkExportSemaphoreCreateInfo exportInfo =
+	VkSemaphoreCreateInfo createInfo =
 	{
-		.sType = VK_STRUCTURE_TYPE_EXPORT_SEMAPHORE_CREATE_INFO,
-		// This is a syncobj fd for any drivers using syncobj.
-		.handleTypes = VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_OPAQUE_FD_BIT,
+		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
 	};
 
-	const VkSemaphoreTypeCreateInfo typeInfo =
+	VkSemaphoreTypeCreateInfo typeInfo =
 	{
 		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
-		.pNext = &exportInfo,
+		.pNext = std::exchange( createInfo.pNext, &typeInfo ),
 		.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
 		.initialValue = ulStartPoint,
 	};
 
-	const VkSemaphoreCreateInfo createInfo =
+	VkExportSemaphoreCreateInfo exportInfo =
 	{
-		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-		.pNext = &typeInfo,
+		.sType = VK_STRUCTURE_TYPE_EXPORT_SEMAPHORE_CREATE_INFO,
+		.pNext = bShared ? std::exchange( createInfo.pNext, &exportInfo ) : nullptr,
+		// This is a syncobj fd for any drivers using syncobj.
+		.handleTypes = VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_OPAQUE_FD_BIT,
 	};
 
 	VkResult res;
 	if ( ( res = vk.CreateSemaphore( m_device, &createInfo, nullptr, &pSemaphore->pVkSemaphore ) ) != VK_SUCCESS )
 	{
 		vk_errorf( res, "vkCreateSemaphore failed" );
-		return nullptr;
-	}
-
-	const VkSemaphoreGetFdInfoKHR semaphoreGetInfo =
-	{
-		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_GET_FD_INFO_KHR,
-		.semaphore = pSemaphore->pVkSemaphore,
-		.handleType = VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_OPAQUE_FD_BIT,
-	};
-
-	if ( ( res = vk.GetSemaphoreFdKHR( m_device, &semaphoreGetInfo, &pSemaphore->nFd ) ) != VK_SUCCESS )
-	{
-		vk_errorf( res, "vkGetSemaphoreFdKHR failed" );
-		return nullptr;
-	}
-
-	int ret;
-	if ( ( ret = drmSyncobjFDToHandle( m_drmRendererFd, pSemaphore->nFd, &pSemaphore->uHandle ) ) != 0 )
-	{
-		vk_log.errorf_errno( "drmSyncobjFDToHandle failed." );
 		return nullptr;
 	}
 
 	return pSemaphore;
 }
 
-std::shared_ptr<VulkanTimelineSemaphore_t> CVulkanDevice::ImportTimelineSemaphore( uint32_t uHandle )
+std::shared_ptr<VulkanTimelineSemaphore_t> CVulkanDevice::ImportTimelineSemaphore( gamescope::CTimeline *pTimeline )
 {
 	std::shared_ptr<VulkanTimelineSemaphore_t> pSemaphore = std::make_unique<VulkanTimelineSemaphore_t>();
 	pSemaphore->pDevice = this;
-	pSemaphore->uHandle = uHandle;
 
 	const VkSemaphoreTypeCreateInfo typeInfo =
 	{
@@ -1380,11 +1367,12 @@ std::shared_ptr<VulkanTimelineSemaphore_t> CVulkanDevice::ImportTimelineSemaphor
 		return nullptr;
 	}
 
-	if ( drmSyncobjHandleToFD( m_drmRendererFd, pSemaphore->uHandle, &pSemaphore->nFd ) != 0 )
-	{
-		vk_log.errorf_errno( "drmSyncobjHandleToFD failed." );
-		return nullptr;
-	}
+    // "Importing a semaphore payload from a file descriptor transfers
+    // ownership of the file descriptor from the application to the Vulkan
+    // implementation. The application must not perform any operations on
+    // the file descriptor after a successful import."
+	//
+	// Thus, we must dup.
 
 	VkImportSemaphoreFdInfoKHR importFdInfo =
 	{
@@ -1393,7 +1381,7 @@ std::shared_ptr<VulkanTimelineSemaphore_t> CVulkanDevice::ImportTimelineSemaphor
 		.semaphore = pSemaphore->pVkSemaphore,
 		.flags = 0, // not temporary
 		.handleType = VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_OPAQUE_FD_BIT,
-		.fd = pSemaphore->nFd,
+		.fd = dup( pTimeline->GetSyncobjFd() ),
 	};
 	if ( ( res = vk.ImportSemaphoreFdKHR( m_device, &importFdInfo ) ) != VK_SUCCESS )
 	{

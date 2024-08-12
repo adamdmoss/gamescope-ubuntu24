@@ -724,8 +724,14 @@ struct VulkanTimelineSemaphore_t
 
 	CVulkanDevice *pDevice = nullptr;
 	VkSemaphore pVkSemaphore = VK_NULL_HANDLE;
-	int nFd = -1; // Syncobj FD, not renderer fd. Get that from pDevice.
-	uint32_t uHandle = 0;
+
+	int GetFd() const;
+};
+
+struct VulkanTimelinePoint_t
+{
+	std::shared_ptr<VulkanTimelineSemaphore_t> pTimelineSemaphore;
+	uint64_t ulPoint;
 };
 
 class CVulkanDevice
@@ -749,8 +755,8 @@ public:
 		return ret;
 	}
 
-	std::shared_ptr<VulkanTimelineSemaphore_t> CreateTimelineSemaphore( uint64_t ulStartingPoint );
-	std::shared_ptr<VulkanTimelineSemaphore_t> ImportTimelineSemaphore( uint32_t uHandle );
+	std::shared_ptr<VulkanTimelineSemaphore_t> CreateTimelineSemaphore( uint64_t ulStartingPoint, bool bShared = false );
+	std::shared_ptr<VulkanTimelineSemaphore_t> ImportTimelineSemaphore( gamescope::CTimeline *pTimeline );
 
 	static const uint32_t upload_buffer_size = 1920 * 1080 * 4;
 
