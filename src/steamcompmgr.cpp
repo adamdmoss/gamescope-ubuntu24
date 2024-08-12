@@ -6253,28 +6253,33 @@ struct TempUpscaleImage_t
 	uint64_t ulLastPoint = 0ul;
 };
 
+static std::vector<TempUpscaleImage_t> g_pUpscaleImages;
+void ClearUpscaleImages()
+{
+	g_pUpscaleImages.clear();
+}
+
 static TempUpscaleImage_t *GetTempUpscaleImage( uint32_t uWidth, uint32_t uHeight, uint32_t uDrmFormat )
 {
-	static std::vector<TempUpscaleImage_t> s_pUpscaleImages;
-	if ( s_pUpscaleImages.size() )
+	if ( g_pUpscaleImages.size() )
 	{
 		// Mixing and matching sizes to only do the min required would be nice
 		// but massively complicates caching.
-		if ( s_pUpscaleImages[0].pTexture->width() != uWidth ||
-			 s_pUpscaleImages[0].pTexture->height() != uHeight ||
-			 s_pUpscaleImages[0].pTexture->drmFormat() != uDrmFormat )
+		if ( g_pUpscaleImages[0].pTexture->width() != uWidth ||
+			 g_pUpscaleImages[0].pTexture->height() != uHeight ||
+			 g_pUpscaleImages[0].pTexture->drmFormat() != uDrmFormat )
 		{
-			s_pUpscaleImages.clear();
+			g_pUpscaleImages.clear();
 		}
 	}
 
-	for ( TempUpscaleImage_t &image : s_pUpscaleImages )
+	for ( TempUpscaleImage_t &image : g_pUpscaleImages )
 	{
 		if ( !image.pTexture->IsInUse() )
 			return &image;
 	}
 
-	if ( s_pUpscaleImages.size() > 8 )
+	if ( g_pUpscaleImages.size() > 8 )
 	{
 		xwm_log.warnf( "No upscale images free!\n" );
 		return {};
@@ -6291,7 +6296,7 @@ static TempUpscaleImage_t *GetTempUpscaleImage( uint32_t uWidth, uint32_t uHeigh
 	imageFlags.bStorage = true;
 	imageFlags.bFlippable = true;
 	pTexture->BInit( g_nOutputWidth, g_nOutputHeight, 1, uDrmFormat, imageFlags );
-	TempUpscaleImage_t &image = s_pUpscaleImages.emplace_back( std::move( pTexture ), std::move( pTimeline ) );
+	TempUpscaleImage_t &image = g_pUpscaleImages.emplace_back( std::move( pTexture ), std::move( pTimeline ) );
 
 	return &image;
 }
@@ -6362,7 +6367,8 @@ void update_wayland_res(CommitDoneList_t *doneCommits, steamcompmgr_win_t *w, Re
 		const bool mango_nudge = ( w == global_focus.focusWindow && !w->isSteamStreamingClient ) ||
 									( global_focus.focusWindow && global_focus.focusWindow->isSteamStreamingClient && w->isSteamStreamingClientVideo );
 
-		bool bPreemptiveUpscale = reslistentry.pAcquirePoint && w == global_focus.focusWindow && newCommit->ShouldPreemptivelyUpscale();
+		bool bValidPreemptiveScale = reslistentry.pAcquirePoint && w == global_focus.focusWindow;
+		bool bPreemptiveUpscale = bValidPreemptiveScale && newCommit->ShouldPreemptivelyUpscale();
 
 		bool bKnownReady = false;
 
@@ -6420,6 +6426,11 @@ void update_wayland_res(CommitDoneList_t *doneCommits, steamcompmgr_win_t *w, Re
 		
 		if ( !bPreemptiveUpscale )
 		{
+			if ( bValidPreemptiveScale )
+			{
+				ClearUpscaleImages();
+			}
+
 			if ( reslistentry.pAcquirePoint )
 			{
 				eventFd = reslistentry.pAcquirePoint->CreateEventFd();
