@@ -347,7 +347,7 @@ create_color_mgmt_luts(const gamescope_color_mgmt_t& newColorMgmt, gamescope_col
 	}
 }
 
-int g_nAsyncFlipsEnabled = 0;
+gamescope::ConVar<bool> cv_tearing_enabled{ "tearing_enabled", false, "Whether or not tearing is enabled." };
 int g_nSteamMaxHeight = 0;
 bool g_bVRRCapable_CachedValue = false;
 bool g_bVRRInUse_CachedValue = false;
@@ -5457,7 +5457,7 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 	}
 	if ( ev->atom == ctx->atoms.gamescopeAllowTearing )
 	{
-		g_nAsyncFlipsEnabled = get_prop( ctx, ctx->root, ctx->atoms.gamescopeAllowTearing, 0 );
+		cv_tearing_enabled = !!get_prop( ctx, ctx->root, ctx->atoms.gamescopeAllowTearing, 0 );
 	}
 	if ( ev->atom == ctx->atoms.gamescopeSteamMaxHeight )
 	{
@@ -7795,42 +7795,103 @@ steamcompmgr_main(int argc, char **argv)
 								( global_focus.externalOverlayWindow && global_focus.externalOverlayWindow->opacity ) ||
 								( global_focus.overrideWindow  && global_focus.focusWindow && !global_focus.focusWindow->isSteamStreamingClient && global_focus.overrideWindow->opacity );
 
-		const bool bSteamOverlayOpen  = global_focus.overlayWindow && global_focus.overlayWindow->opacity;
 		// If we are running behind, allow tearing.
-		const bool bSurfaceWantsAsync = (g_HeldCommits[HELD_COMMIT_BASE] != nullptr && g_HeldCommits[HELD_COMMIT_BASE]->async);
 
 		const bool bForceRepaint = g_bForceRepaint.exchange(false);
 		const bool bForceSyncFlip = bForceRepaint || is_fading_out();
+
 		// If we are compositing, always force sync flips because we currently wait
 		// for composition to finish before submitting.
 		// If we want to do async + composite, we should set up syncfile stuff and have DRM wait on it.
-		const bool bNeedsSyncFlip = bForceSyncFlip || GetVBlankTimer().WasCompositing() || nIgnoredOverlayRepaints;
-		const bool bDoAsyncFlip   = ( ((g_nAsyncFlipsEnabled >= 1) && GetBackend()->SupportsTearing() && bSurfaceWantsAsync && !bHasOverlay) || bVRR ) && !bSteamOverlayOpen && !bNeedsSyncFlip;
+		const bool bSurfaceWantsAsync = (g_HeldCommits[HELD_COMMIT_BASE] != nullptr && g_HeldCommits[HELD_COMMIT_BASE]->async);
+		const bool bTearing = cv_tearing_enabled && GetBackend()->SupportsTearing() && bSurfaceWantsAsync;
+
+		enum class FlipType
+		{
+			Normal,
+			Async,
+			VRR,
+		};
+
+		FlipType eFlipType = FlipType::Normal;
+
+		if ( bForceSyncFlip )
+			eFlipType = FlipType::Normal;
+		else if ( bVRR )
+			eFlipType = FlipType::VRR;
+		else if ( bTearing )
+		{
+			eFlipType = FlipType::Async;
+
+			if ( nIgnoredOverlayRepaints )
+				eFlipType = FlipType::Normal;
+			if ( bHasOverlay ) // Don't tear if the Steam or perf overlay is up atm.
+				eFlipType = FlipType::Normal;
+			if ( GetVBlankTimer().WasCompositing() )
+				eFlipType = FlipType::Normal;
+		}
+		else
+			eFlipType = FlipType::Normal;
 
 		bool bShouldPaint = false;
-		if ( bDoAsyncFlip )
+
+		if ( GetBackend()->IsVisible() )
 		{
-			if ( hasRepaint && !GetVBlankTimer().WasCompositing() )
-				bShouldPaint = true;
+			switch ( eFlipType )
+			{
+				case FlipType::Normal:
+				{
+					bShouldPaint = vblank && ( hasRepaint || hasRepaintNonBasePlane || bForceSyncFlip );
+					break;
+				}
+
+				case FlipType::Async:
+				{
+					bShouldPaint = hasRepaint;
+
+					if ( vblank && !bShouldPaint && hasRepaintNonBasePlane )
+						nIgnoredOverlayRepaints++;
+
+					break;
+				}
+
+				case FlipType::VRR:
+				{
+					bShouldPaint = hasRepaint || nIgnoredOverlayRepaints != 0;
+
+					if ( vblank )
+					{
+						if ( nIgnoredOverlayRepaints != 0 )
+						{
+							// If we hit vblank and we previously punted on drawing an overlay
+							// we should go ahead and draw now.
+							bShouldPaint = true;
+						}
+						else if ( !bShouldPaint && hasRepaintNonBasePlane )
+						{
+							// If we hit vblank (ie. fastest refresh cycle since last commit),
+							// and we aren't painting and we have a pending overlay, then:
+							// defer it until the next game update or next true vblank.
+							nIgnoredOverlayRepaints++;
+						}
+					}
+
+					// If we have a pending page flip and doing VRR, lets not do another...
+					if ( GetBackend()->PresentationFeedback().CurrentPresentsInFlight() != 0 )
+						bShouldPaint = false;
+
+					break;
+				}
+			}
 		}
 		else
 		{
-			bShouldPaint = vblank && ( hasRepaint || hasRepaintNonBasePlane || bForceSyncFlip );
+			bShouldPaint = false;
 		}
-
-		// If we have a pending page flip and doing VRR, lets not do another...
-		if ( bVRR && GetBackend()->PresentationFeedback().CurrentPresentsInFlight() != 0 )
-			bShouldPaint = false;
-
-		if ( !bShouldPaint && hasRepaintNonBasePlane && vblank )
-			nIgnoredOverlayRepaints++;
-
-		if ( !GetBackend()->IsVisible() )
-			bShouldPaint = false;
 
 		if ( bShouldPaint )
 		{
-			paint_all( !vblank && !bVRR );
+			paint_all( eFlipType == FlipType::Async );
 
 			hasRepaint = false;
 			hasRepaintNonBasePlane = false;
