@@ -893,6 +893,10 @@ bool g_bChangeDynamicRefreshBasedOnGameOpenRatherThanActive = false;
 
 bool steamcompmgr_window_should_limit_fps( steamcompmgr_win_t *w )
 {
+	// VRR + FPS Limit needs another approach.
+	if ( GetBackend()->IsVRRActive() )
+		return false;
+
 	return w && !window_is_steam( w ) && !w->isOverlay && !w->isExternalOverlay;
 }
 
@@ -914,6 +918,9 @@ steamcompmgr_user_has_any_game_open()
 
 bool steamcompmgr_window_should_refresh_switch( steamcompmgr_win_t *w )
 {
+	if ( GetBackend()->IsVRRActive() )
+		return false;
+
 	if ( g_bChangeDynamicRefreshBasedOnGameOpenRatherThanActive )
 		return steamcompmgr_user_has_any_game_open();
 
@@ -5026,6 +5033,9 @@ steamcompmgr_flush_frame_done( steamcompmgr_win_t *w )
 
 static bool steamcompmgr_should_vblank_window( bool bShouldLimitFPS, uint64_t vblank_idx )
 {
+	if ( GetBackend()->IsVRRActive() )
+		return true;
+
 	bool bSendCallback = true;
 
 	int nRefreshHz = gamescope::ConvertmHzToHz( g_nNestedRefresh ? g_nNestedRefresh : g_nOutputRefresh );
@@ -7436,7 +7446,6 @@ steamcompmgr_main(int argc, char **argv)
 		readyPipeFD = -1;
 	}
 
-	bool vblank = false;
 	g_SteamCompMgrWaiter.AddWaitable( &GetVBlankTimer() );
 	GetVBlankTimer().ArmNextVBlank( true );
 
@@ -7471,8 +7480,6 @@ steamcompmgr_main(int argc, char **argv)
 
 	for (;;)
 	{
-		vblank = false;
-
 		{
 			gamescope_xwayland_server_t *server = NULL;
 			for (size_t i = 0; (server = wlserver_get_xwayland_server(i)); i++)
@@ -7485,6 +7492,7 @@ steamcompmgr_main(int argc, char **argv)
 
 		g_SteamCompMgrWaiter.PollEvents();
 
+		bool vblank = false;
 		if ( std::optional<gamescope::VBlankTime> pendingVBlank = GetVBlankTimer().ProcessVBlank() )
 		{
 			g_SteamCompMgrVBlankTime = *pendingVBlank;
@@ -7495,6 +7503,16 @@ steamcompmgr_main(int argc, char **argv)
 		{
 			break;
 		}
+
+		// If this is from the timer or not.
+		// Consider this to also be "is this vblank, the fastest refresh cycle after our last commit?"
+		// as a question.
+		const bool bIsVBlankFromTimer = vblank;
+
+		// We can always vblank if VRR.
+		const bool bVRR = GetBackend()->IsVRRActive();
+		if ( bVRR )
+			vblank = true;
 
 		bool flush_root = false;
 
@@ -7601,7 +7619,7 @@ steamcompmgr_main(int argc, char **argv)
 		// application can commit a new frame that completes before we ever displayed
 		// the current pending commit.
 		static uint64_t vblank_idx = 0;
-		if ( vblank == true )
+		if ( vblank )
 		{
 			{
 				gamescope_xwayland_server_t *server = NULL;
@@ -7787,8 +7805,6 @@ steamcompmgr_main(int argc, char **argv)
 
 		static int nIgnoredOverlayRepaints = 0;
 
-		const bool bVRR = GetBackend()->IsVRRActive();
-
 		// HACK: Disable tearing if we have an overlay to avoid stutters right now
 		// TODO: Fix properly.
 		const bool bHasOverlay = ( global_focus.overlayWindow && global_focus.overlayWindow->opacity ) ||
@@ -7859,7 +7875,7 @@ steamcompmgr_main(int argc, char **argv)
 				{
 					bShouldPaint = hasRepaint || nIgnoredOverlayRepaints != 0;
 
-					if ( vblank )
+					if ( bIsVBlankFromTimer )
 					{
 						if ( nIgnoredOverlayRepaints != 0 )
 						{
@@ -7898,12 +7914,7 @@ steamcompmgr_main(int argc, char **argv)
 			nIgnoredOverlayRepaints = 0;
 		}
 
-#if HAVE_PIPEWIRE
-		if ( vblank && pipewire_is_streaming() )
-			paint_pipewire();
-#endif
-
-		if ( vblank )
+		if ( bIsVBlankFromTimer )
 		{
 			// Pre-emptively re-arm the vblank timer if it
 			// isn't already re-armed.
@@ -7911,6 +7922,11 @@ steamcompmgr_main(int argc, char **argv)
 			// Juuust in case pageflip handler doesn't happen
 			// so we don't stop vblanking forever.
 			GetVBlankTimer().ArmNextVBlank( true );
+
+#if HAVE_PIPEWIRE
+			if ( pipewire_is_streaming() )
+				paint_pipewire();
+#endif
 		}
 
 		update_vrr_atoms(root_ctx, false, &flush_root);
