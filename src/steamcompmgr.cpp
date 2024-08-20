@@ -194,6 +194,7 @@ static void
 update_runtime_info();
 
 gamescope::ConVar<bool> cv_adaptive_sync( "adaptive_sync", false, "Whether or not adaptive sync is enabled if available." );
+gamescope::ConVar<bool> cv_adaptive_sync_ignore_overlay( "adaptive_sync_ignore_overlay", false, "Whether or not to ignore overlay planes for pushing commits with adaptive sync." );
 
 uint64_t g_SteamCompMgrLimitedAppRefreshCycle = 16'666'666;
 uint64_t g_SteamCompMgrAppRefreshCycle = 16'666'666;
@@ -7806,7 +7807,10 @@ steamcompmgr_main(int argc, char **argv)
 		static int nIgnoredOverlayRepaints = 0;
 
 		if ( !hasRepaintNonBasePlane )
-			nIgnoredOverlayRepaint = 0;
+			nIgnoredOverlayRepaints = 0;
+
+		if ( cv_adaptive_sync_ignore_overlay )
+			nIgnoredOverlayRepaints = 0;
 
 		// HACK: Disable tearing if we have an overlay to avoid stutters right now
 		// TODO: Fix properly.
@@ -7893,7 +7897,8 @@ steamcompmgr_main(int argc, char **argv)
 								// If we hit vblank (ie. fastest refresh cycle since last commit),
 								// and we aren't painting and we have a pending overlay, then:
 								// defer it until the next game update or next true vblank.
-								nIgnoredOverlayRepaints++;
+								if ( !cv_adaptive_sync_ignore_overlay )
+									nIgnoredOverlayRepaints++;
 							}
 						}
 					}
