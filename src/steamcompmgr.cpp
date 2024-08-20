@@ -7877,18 +7877,21 @@ steamcompmgr_main(int argc, char **argv)
 
 					if ( bIsVBlankFromTimer )
 					{
-						if ( nIgnoredOverlayRepaints != 0 )
+						if ( hasRepaintNonBasePlane )
 						{
-							// If we hit vblank and we previously punted on drawing an overlay
-							// we should go ahead and draw now.
-							bShouldPaint = true;
-						}
-						else if ( !bShouldPaint && hasRepaintNonBasePlane )
-						{
-							// If we hit vblank (ie. fastest refresh cycle since last commit),
-							// and we aren't painting and we have a pending overlay, then:
-							// defer it until the next game update or next true vblank.
-							nIgnoredOverlayRepaints++;
+							if ( nIgnoredOverlayRepaints != 0 )
+							{
+								// If we hit vblank and we previously punted on drawing an overlay
+								// we should go ahead and draw now.
+								bShouldPaint = true;
+							}
+							else if ( !bShouldPaint )
+							{
+								// If we hit vblank (ie. fastest refresh cycle since last commit),
+								// and we aren't painting and we have a pending overlay, then:
+								// defer it until the next game update or next true vblank.
+								nIgnoredOverlayRepaints++;
+							}
 						}
 					}
 
