@@ -7805,6 +7805,9 @@ steamcompmgr_main(int argc, char **argv)
 
 		static int nIgnoredOverlayRepaints = 0;
 
+		if ( !hasRepaintNonBasePlane )
+			nIgnoredOverlayRepaint = 0;
+
 		// HACK: Disable tearing if we have an overlay to avoid stutters right now
 		// TODO: Fix properly.
 		const bool bHasOverlay = ( global_focus.overlayWindow && global_focus.overlayWindow->opacity ) ||
