@@ -195,6 +195,7 @@ update_runtime_info();
 
 gamescope::ConVar<bool> cv_adaptive_sync( "adaptive_sync", false, "Whether or not adaptive sync is enabled if available." );
 gamescope::ConVar<bool> cv_adaptive_sync_ignore_overlay( "adaptive_sync_ignore_overlay", false, "Whether or not to ignore overlay planes for pushing commits with adaptive sync." );
+gamescope::ConVar<int> cv_adaptive_sync_overlay_cycles( "adaptive_sync_overlay_cycles", 1, "" );
 
 uint64_t g_SteamCompMgrLimitedAppRefreshCycle = 16'666'666;
 uint64_t g_SteamCompMgrAppRefreshCycle = 16'666'666;
@@ -7880,13 +7881,13 @@ steamcompmgr_main(int argc, char **argv)
 
 				case FlipType::VRR:
 				{
-					bShouldPaint = hasRepaint || nIgnoredOverlayRepaints != 0;
+					bShouldPaint = hasRepaint;
 
 					if ( bIsVBlankFromTimer )
 					{
 						if ( hasRepaintNonBasePlane )
 						{
-							if ( nIgnoredOverlayRepaints != 0 )
+							if ( nIgnoredOverlayRepaints >= cv_adaptive_sync_overlay_cycles )
 							{
 								// If we hit vblank and we previously punted on drawing an overlay
 								// we should go ahead and draw now.
