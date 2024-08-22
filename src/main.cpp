@@ -720,6 +720,8 @@ int main(int argc, char **argv)
 				break;
 			case 'e':
 				steamMode = true;
+				if ( gamescope::cv_backend_virtual_connector_strategy == gamescope::VirtualConnectorStrategies::SingleApplication )
+					gamescope::cv_backend_virtual_connector_strategy = gamescope::VirtualConnectorStrategies::SteamControlled;
 				break;
 			case 0: // long options without a short option
 				opt_name = gamescope_options[opt_index].name;

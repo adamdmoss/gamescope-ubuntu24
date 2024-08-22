@@ -48,6 +48,8 @@ extern gamescope::ConVar<bool> cv_hdr_enabled;
 
 extern uint64_t g_SteamCompMgrLimitedAppRefreshCycle;
 
+void MakeFocusDirty();
+
 static LogScope openvr_log("openvr");
 
 static bool GetVulkanInstanceExtensionsRequired( std::vector< std::string > &outInstanceExtensionList );
@@ -62,6 +64,7 @@ gamescope::ConVar<bool> cv_vr_trackpad_relative_mouse_mode( "vr_trackpad_relativ
 gamescope::ConVar<float> cv_vr_trackpad_sensitivity( "vr_trackpad_sensitivity", 1500.f, "Sensitivity for VR Trackpad Mode" );
 gamescope::ConVar<uint64_t> cv_vr_trackpad_click_time( "vr_trackpad_click_time", 250'000'000ul, "Time to consider a 'click' vs a 'drag' when using trackpad mode. In nanoseconds." );
 gamescope::ConVar<float> cv_vr_trackpad_click_max_delta( "vr_trackpad_click_max_delta", 0.14f, "Max amount the cursor can move before not clicking." );
+gamescope::ConVar<bool> cv_vr_debug_force_opaque( "vr_debug_force_opaque", false, "Force textures to be treated as opaque." );
 
 // Just below half of 120Hz, so we always at least poll input once per frame, regardless of cadence/cycles.
 gamescope::ConVar<uint64_t> cv_vr_poll_rate( "vr_poll_rate", 4'000'000ul, "Time between input polls. In nanoseconds." );
@@ -170,98 +173,10 @@ static bool GetVulkanDeviceExtensionsRequired( VkPhysicalDevice pPhysicalDevice,
 
 namespace gamescope
 {
-    class CVROverlayConnector final : public IBackendConnector
-    {
-    public:
-
-        //////////////////////
-        // IBackendConnector
-        //////////////////////
-
-        CVROverlayConnector()
-        {
-        }
-        virtual ~CVROverlayConnector()
-        {
-        }
-
-        virtual GamescopeScreenType GetScreenType() const override
-        {
-            return GAMESCOPE_SCREEN_TYPE_INTERNAL;
-        }
-        virtual GamescopePanelOrientation GetCurrentOrientation() const override
-        {
-            return GAMESCOPE_PANEL_ORIENTATION_0;
-        }
-        virtual bool SupportsHDR() const override
-        {
-            return false;
-        }
-        virtual bool IsHDRActive() const override
-        {
-            return false;
-        }
-        virtual const BackendConnectorHDRInfo &GetHDRInfo() const override
-        {
-            return m_HDRInfo;
-        }
-        virtual std::span<const BackendMode> GetModes() const override
-        {
-            return std::span<const BackendMode>{};
-        }
-
-        virtual bool SupportsVRR() const override
-        {
-            return false;
-        }
-
-        virtual std::span<const uint8_t> GetRawEDID() const override
-        {
-            return std::span<const uint8_t>{ m_FakeEdid.begin(), m_FakeEdid.end() };
-        }
-        virtual std::span<const uint32_t> GetValidDynamicRefreshRates() const override
-        {
-            return std::span<const uint32_t>{};
-        }
-
-        virtual void GetNativeColorimetry(
-            bool bHDR10,
-            displaycolorimetry_t *displayColorimetry, EOTF *displayEOTF,
-            displaycolorimetry_t *outputEncodingColorimetry, EOTF *outputEncodingEOTF ) const override
-        {
-			*displayColorimetry = displaycolorimetry_709;
-			*displayEOTF = EOTF_Gamma22;
-			*outputEncodingColorimetry = displaycolorimetry_709;
-			*outputEncodingEOTF = EOTF_Gamma22;
-        }
-
-        virtual const char *GetName() const override
-        {
-            return "OpenVR";
-        }
-        virtual const char *GetMake() const override
-        {
-            return "Gamescope";
-        }
-        virtual const char *GetModel() const override
-        {
-            return "Virtual Display";
-        }
-
-        bool UpdateEdid()
-        {
-            m_FakeEdid = GenerateSimpleEdid( g_nNestedWidth, g_nNestedHeight );
-
-            return true;
-        }
-
-    private:
-        BackendConnectorHDRInfo m_HDRInfo{};
-        std::vector<uint8_t> m_FakeEdid;
-    };
-
-
     class COpenVRBackend;
+    class COpenVRPlane;
+    class COpenVRFb;
+    class COpenVRConnector;
 
     class COpenVRFb final : public CBaseBackendFb
     {
@@ -295,7 +210,7 @@ namespace gamescope
     class COpenVRPlane
     {
     public:
-        COpenVRPlane( COpenVRBackend *pBackend );
+        COpenVRPlane( COpenVRConnector *pConnector );
         ~COpenVRPlane();
 
         bool Init( COpenVRPlane *pParent, COpenVRPlane *pSiblingBelow );
@@ -309,8 +224,13 @@ namespace gamescope
         uint32_t GetSortOrder() const { return m_uSortOrder; }
         bool IsSubview() const { return m_bIsSubview; }
 
+        COpenVRBackend *GetBackend() const { return m_pBackend; }
+
     private:
+        COpenVRConnector *m_pConnector = nullptr;
         COpenVRBackend *m_pBackend = nullptr;
+
+        std::string m_sDashboardOverlayKey;
 
         bool m_bIsSubview = false;
         uint32_t m_uSortOrder = 0;
@@ -318,12 +238,90 @@ namespace gamescope
         vr::VROverlayHandle_t m_hOverlayThumbnail = vr::k_ulOverlayHandleInvalid;
     };
 
+    class COpenVRConnector final : public CBaseBackendConnector, public INestedHints
+    {
+    public:
 
-	class COpenVRBackend final : public CBaseBackend, public INestedHints
+        COpenVRConnector( COpenVRBackend *pBackend, uint64_t ulVirtualConnectorKey );
+
+        //////////////////////
+        // IBackendConnector
+        //////////////////////
+
+        ~COpenVRConnector();
+        virtual GamescopeScreenType GetScreenType() const override;
+        virtual GamescopePanelOrientation GetCurrentOrientation() const override;
+        virtual bool SupportsHDR() const override;
+        virtual bool IsHDRActive() const override;
+        virtual const BackendConnectorHDRInfo &GetHDRInfo() const override;
+		virtual bool IsVRRActive() const override;
+        virtual std::span<const BackendMode> GetModes() const override;
+
+        virtual bool SupportsVRR() const override;
+
+        virtual std::span<const uint8_t> GetRawEDID() const override;
+        virtual std::span<const uint32_t> GetValidDynamicRefreshRates() const override;
+
+        virtual void GetNativeColorimetry(
+            bool bHDR10,
+            displaycolorimetry_t *displayColorimetry, EOTF *displayEOTF,
+            displaycolorimetry_t *outputEncodingColorimetry, EOTF *outputEncodingEOTF ) const override;
+
+        virtual const char *GetName() const override;
+        virtual const char *GetMake() const override;
+        virtual const char *GetModel() const override;
+
+        virtual VBlankScheduleTime FrameSync() override;
+
+		virtual int Present( const FrameInfo_t *pFrameInfo, bool bAsync ) override;
+
+        virtual INestedHints *GetNestedHints() override
+        {
+            return this;
+        }
+
+        ///////////////////
+        // INestedHints
+        ///////////////////
+
+        virtual void SetCursorImage( std::shared_ptr<INestedHints::CursorInfo> info ) override;
+        virtual void SetRelativeMouseMode( bool bRelative ) override;
+        virtual void SetVisible( bool bVisible ) override;
+        virtual void SetTitle( std::shared_ptr<std::string> szTitle ) override;
+        virtual void SetIcon( std::shared_ptr<std::vector<uint32_t>> uIconPixels ) override;
+        virtual void SetSelection( std::shared_ptr<std::string> szContents, GamescopeSelection eSelection ) override;
+
+        bool UpdateEdid();
+
+        bool Init();
+
+        COpenVRBackend *GetBackend() const { return m_pBackend; }
+
+        COpenVRPlane *GetPrimaryPlane()
+        {
+            return &m_Planes[0];
+        }
+
+        std::span<COpenVRPlane> GetPlanes() { return std::span<COpenVRPlane>( &m_Planes[0], std::size( m_Planes ) ); }
+
+        bool ConsumeNudgeToVisible() { return std::exchange( m_bNudgeToVisible, false ); }
+        bool IsRelativeMouse() const { return m_bRelativeMouse; }
+
+    private:
+        COpenVRBackend *m_pBackend = nullptr;
+        COpenVRPlane m_Planes[8];
+
+        BackendConnectorHDRInfo m_HDRInfo{};
+        std::vector<uint8_t> m_FakeEdid;
+
+        bool m_bNudgeToVisible = false;
+        std::atomic<bool> m_bRelativeMouse = false;
+    };
+
+	class COpenVRBackend final : public CBaseBackend
 	{
 	public:
 		COpenVRBackend()
-            : m_Planes{ this, this, this, this, this, this, this, this }
 		{
 		}
 
@@ -421,9 +419,6 @@ namespace gamescope
                 }
             }
 
-            if ( m_szOverlayKey.empty() )
-                m_szOverlayKey = std::string( "gamescope." ) + wlserver_get_wl_display_name();
-
             if ( !m_pchOverlayName )
                 m_pchOverlayName = "Gamescope";
 
@@ -483,18 +478,12 @@ namespace gamescope
 
 		virtual bool PostInit() override
 		{
+            if ( m_szOverlayKey.empty() )
+                m_szOverlayKey = std::string( "gamescope." ) + wlserver_get_wl_display_name();
+
 			m_pIME = create_local_ime();
             if ( !m_pIME )
                 return false;
-
-            for ( uint32_t i = 0; i < 8; i++ )
-                m_Planes[i].Init( i == 0 ? nullptr : &m_Planes[0], i == 0 ? nullptr : &m_Planes[ i - 1 ] );
-
-            m_Connector.UpdateEdid();
-            this->HackUpdatePatchedEdid();
-
-            if ( cv_hdr_enabled && m_Connector.GetHDRInfo().bExposeHDRSupport )
-                setenv( "DXVK_HDR", "1", false );
 
             // This breaks cursor intersection right now.
             // Come back to me later.
@@ -540,102 +529,6 @@ namespace gamescope
 		virtual bool ValidPhysicalDevice( VkPhysicalDevice pVkPhysicalDevice ) const override
 		{
 			return true;
-		}
-
-		virtual int Present( const FrameInfo_t *pFrameInfo, bool bAsync ) override
-		{
-            bool bNeedsFullComposite = false;
-
-            // TODO: Dedupe some of this composite check code between us and drm.cpp
-            bool bLayer0ScreenSize = close_enough(pFrameInfo->layers[0].scale.x, 1.0f) && close_enough(pFrameInfo->layers[0].scale.y, 1.0f);
-
-            bool bNeedsCompositeFromFilter = (g_upscaleFilter == GamescopeUpscaleFilter::NEAREST || g_upscaleFilter == GamescopeUpscaleFilter::PIXEL) && !bLayer0ScreenSize;
-
-            bNeedsFullComposite |= cv_composite_force;
-            bNeedsFullComposite |= pFrameInfo->useFSRLayer0;
-            bNeedsFullComposite |= pFrameInfo->useNISLayer0;
-            bNeedsFullComposite |= pFrameInfo->blurLayer0;
-            bNeedsFullComposite |= bNeedsCompositeFromFilter;
-            bNeedsFullComposite |= g_bColorSliderInUse;
-            bNeedsFullComposite |= pFrameInfo->bFadingOut;
-            bNeedsFullComposite |= !g_reshade_effect.empty();
-            bNeedsFullComposite |= !UsesModifiers();
-
-            if ( g_bOutputHDREnabled )
-                bNeedsFullComposite |= g_bHDRItmEnable;
-
-            if ( !SupportsColorManagement() )
-                bNeedsFullComposite |= ColorspaceIsHDR( pFrameInfo->layers[0].colorspace );
-
-            bNeedsFullComposite |= !!(g_uCompositeDebug & CompositeDebugFlag::Heatmap);
-
-            if ( !bNeedsFullComposite )
-            {
-                bool bNeedsBacking = true;
-                if ( pFrameInfo->layerCount >= 1 )
-                {
-                    if ( pFrameInfo->layers[0].isScreenSize() && ( !pFrameInfo->layers[0].hasAlpha() || cv_vr_transparent_backing ) )
-                        bNeedsBacking = false;
-                }
-
-                uint32_t uCurrentPlane = 0;
-                if ( bNeedsBacking )
-                {
-                    COpenVRPlane *pPlane = &m_Planes[uCurrentPlane++];
-                    pPlane->Present(
-                        OpenVRPlaneState
-                        {
-                            .pTexture    = m_pBlackTexture.get(),
-                            .flSrcWidth  = double( g_nOutputWidth ),
-                            .flSrcHeight = double( g_nOutputHeight ),
-                            .nDstWidth   = int32_t( g_nOutputWidth ),
-                            .nDstHeight  = int32_t( g_nOutputHeight ),
-                            .eColorspace = GAMESCOPE_APP_TEXTURE_COLORSPACE_PASSTHRU,
-                            .bOpaque     = !cv_vr_transparent_backing,
-                            .flAlpha     = cv_vr_transparent_backing ? 0.0f : 1.0f,
-                        } );
-                }
-
-                for ( int i = 0; i < 8 && uCurrentPlane < 8; i++ )
-                    m_Planes[uCurrentPlane++].Present( i < pFrameInfo->layerCount ? &pFrameInfo->layers[i] : nullptr );
-            }
-            else
-            {
-                std::optional oCompositeResult = vulkan_composite( (FrameInfo_t *)pFrameInfo, nullptr, false );
-                if ( !oCompositeResult )
-                {
-                    openvr_log.errorf( "vulkan_composite failed" );
-                    return -EINVAL;
-                }
-
-                vulkan_wait( *oCompositeResult, true );
-
-                FrameInfo_t::Layer_t compositeLayer{};
-                compositeLayer.scale.x = 1.0;
-                compositeLayer.scale.y = 1.0;
-                compositeLayer.opacity = 1.0;
-                compositeLayer.zpos = g_zposBase;
-
-                compositeLayer.tex = vulkan_get_last_output_image( false, false );
-                compositeLayer.applyColorMgmt = false;
-
-                compositeLayer.filter = GamescopeUpscaleFilter::NEAREST;
-                compositeLayer.ctm = nullptr;
-                compositeLayer.colorspace = pFrameInfo->outputEncodingEOTF == EOTF_PQ ? GAMESCOPE_APP_TEXTURE_COLORSPACE_HDR10_PQ : GAMESCOPE_APP_TEXTURE_COLORSPACE_SRGB;
-
-                GetPrimaryPlane()->Present( &compositeLayer );
-
-                for ( int i = 1; i < 8; i++ )
-                    m_Planes[i].Present( nullptr );
-            }
-
-
-            GetVBlankTimer().UpdateWasCompositing( true );
-            GetVBlankTimer().UpdateLastDrawTime( get_time_in_nanos() - g_SteamCompMgrVBlankTime.ulWakeupTime );
-
-            this->PollState();
-
-            return 0;
 		}
 
 		virtual void DirtyState( bool bForce, bool bForceModeset ) override
@@ -733,19 +626,14 @@ namespace gamescope
 
 		virtual IBackendConnector *GetCurrentConnector() override
 		{
-			return &m_Connector;
+			return m_pFocusConnector;
 		}
 		virtual IBackendConnector *GetConnector( GamescopeScreenType eScreenType ) override
 		{
 			if ( eScreenType == GAMESCOPE_SCREEN_TYPE_INTERNAL )
-				return &m_Connector;
+				return GetCurrentConnector();
 
 			return nullptr;
-		}
-
-		virtual bool IsVRRActive() const override
-		{
-			return false;
 		}
 
 		virtual bool SupportsPlaneHardwareCursor() const override
@@ -780,7 +668,7 @@ namespace gamescope
             if ( ShouldNudgeToVisible() )
                 return true;
 
-            return m_bOverlayVisible.load();
+            return m_nOverlaysVisible.load() != 0;
 		}
 
 		virtual glm::uvec2 CursorSurfaceSize( glm::uvec2 uvecSize ) const override
@@ -798,6 +686,17 @@ namespace gamescope
             if ( !GetCurrentConnector() )
                 return;
 
+            // XXX: We should do this a better way that handles per-window and appid stuff
+            // down the line
+            if ( cv_hdr_enabled && GetCurrentConnector()->GetHDRInfo().bExposeHDRSupport )
+            {
+                setenv( "DXVK_HDR", "1", true );
+            }
+            else
+            {
+                setenv( "DXVK_HDR", "0", true );
+            }
+
             WritePatchedEdid( GetCurrentConnector()->GetRawEDID(), GetCurrentConnector()->GetHDRInfo(), false );
 		}
 
@@ -805,101 +704,53 @@ namespace gamescope
         {
             return true;
         }
-        virtual VBlankScheduleTime FrameSync() override
-        {
-            WaitUntilVisible();
-
-            if ( vr::VROverlay()->WaitFrameSync( ~0u ) != vr::VROverlayError_None )
-                openvr_log.errorf( "WaitFrameSync failed!" );
-
-            uint64_t ulNow = get_time_in_nanos();
-            return VBlankScheduleTime
-            {
-                .ulTargetVBlank  = ulNow + 3'000'000, // Not right. just a stop-gap for now.
-                .ulScheduledWakeupPoint = ulNow,
-            };
-        }
 
         virtual TouchClickMode GetTouchClickMode() override
         {
-            if ( cv_vr_trackpad_relative_mouse_mode && m_bRelativeMouse )
+            COpenVRConnector *pConnector = static_cast<COpenVRConnector *>( GetCurrentConnector() );
+            if ( cv_vr_trackpad_relative_mouse_mode && pConnector && pConnector->IsRelativeMouse() )
             {
                 return TouchClickModes::Trackpad;
+            }
+
+            if ( VirtualConnectorInSteamPerAppState() )
+            {
+                if ( !VirtualConnectorKeyIsSteam( pConnector->GetVirtualConnectorKey() ) )
+                    return TouchClickModes::Left;
             }
 
             return CBaseBackend::GetTouchClickMode();
         }
 
-		virtual INestedHints *GetNestedHints() override
+        bool UsesVirtualConnectors() override
         {
-            return this;
+            return true;
         }
-
-		///////////////////
-		// INestedHints
-		///////////////////
-
-        virtual void SetCursorImage( std::shared_ptr<INestedHints::CursorInfo> info ) override
+        std::shared_ptr<IBackendConnector> CreateVirtualConnector( uint64_t ulVirtualConnectorKey ) override
         {
-        }
-        virtual void SetRelativeMouseMode( bool bRelative ) override
-        {
-            if ( bRelative != m_bRelativeMouse )
+            std::shared_ptr<COpenVRConnector> pConnector = std::make_shared<COpenVRConnector>( this, ulVirtualConnectorKey );
+
+            bool bSetCurrentConnector = false;
             {
-                for ( COpenVRPlane &plane : m_Planes )
+                if ( !m_pFocusConnector )
                 {
-                    vr::VROverlay()->SetOverlayFlag( plane.GetOverlay(), vr::VROverlayFlags_HideLaserIntersection, cv_vr_trackpad_hide_laser && bRelative );
+                    SetFocus( pConnector.get() );
+                    bSetCurrentConnector = true;
                 }
-                m_bRelativeMouse = bRelative;
             }
-        }
-        virtual void SetVisible( bool bVisible ) override
-        {
-            vr::VROverlay()->SetOverlayFlag( GetPrimaryPlane()->GetOverlay(), vr::VROverlayFlags_VisibleInDashboard, bVisible );
-        }
-        virtual void SetTitle( std::shared_ptr<std::string> szTitle ) override
-        {
-            if ( !m_bExplicitOverlayName )
-                vr::VROverlay()->SetOverlayName( GetPrimaryPlane()->GetOverlay(), szTitle ? szTitle->c_str() : m_pchOverlayName );
 
-        }
-        virtual void SetIcon( std::shared_ptr<std::vector<uint32_t>> uIconPixels ) override
-        {
-            if ( cv_vr_use_window_icons && uIconPixels && uIconPixels->size() >= 3 )
+            if ( !pConnector->Init() )
             {
-                const uint32_t uWidth = (*uIconPixels)[0];
-                const uint32_t uHeight = (*uIconPixels)[1];
-
-                struct rgba_t
+                if ( bSetCurrentConnector )
                 {
-                    uint8_t r,g,b,a;
-                };
-
-                for ( uint32_t& val : *uIconPixels )
-                {
-                    rgba_t rgb = *((rgba_t*)&val);
-                    std::swap(rgb.r, rgb.b);
-                    val = *((uint32_t*)&rgb);
+                    SetFocus( nullptr );
                 }
+                return nullptr;
+            }
 
-                vr::VROverlay()->SetOverlayRaw( GetPrimaryPlane()->GetOverlayThumbnail(), &(*uIconPixels)[2], uWidth, uHeight, sizeof(uint32_t) );
-            }
-            else if ( m_pchOverlayIcon )
-            {
-                vr::VROverlay()->SetOverlayFromFile( GetPrimaryPlane()->GetOverlayThumbnail(), m_pchOverlayIcon );
-            }
-            else
-            {
-                vr::VROverlay()->ClearOverlayTexture( GetPrimaryPlane()->GetOverlayThumbnail() );
-            }
-        }
-        virtual void SetSelection( std::shared_ptr<std::string> szContents, GamescopeSelection eSelection ) override
-        {
-            // Do nothing.
-        }
-        virtual std::shared_ptr<INestedHints::CursorInfo> GetHostCursor() override
-        {
-            return nullptr;
+            std::scoped_lock lock{ m_mutActiveConnectors };
+            m_pActiveConnectors.push_back( pConnector.get() );         
+            return pConnector;
         }
 
         vr::IVRIPCResourceManagerClient *GetIPCResourceManager()
@@ -923,10 +774,10 @@ namespace gamescope
         float GetPhysicalCurvature() const { return m_flPhysicalCurvature; }
         float GetPhysicalPreCurvePitch() const { return m_flPhysicalPreCurvePitch; }
         float GetScrollSpeed() const { return m_flScrollSpeed; }
-        bool IsRelativeMouse() const { return m_bRelativeMouse; }
 
         bool ShouldNudgeToVisible() const { return m_bNudgeToVisible; }
-        bool ConsumeNudgeToVisible() { return std::exchange( m_bNudgeToVisible, false ); }
+
+        CVulkanTexture *GetBlackTexture() { return m_pBlackTexture.get(); }
 
 	protected:
 
@@ -936,17 +787,19 @@ namespace gamescope
 
 	private:
 
-        COpenVRPlane *GetPrimaryPlane()
-        {
-            return &m_Planes[0];
-        }
-
         void WaitUntilVisible()
         {
             if ( ShouldNudgeToVisible() )
                 return;
 
-            m_bOverlayVisible.wait( false );
+            m_nOverlaysVisible.wait( 0 );
+        }
+
+        void SetFocus( COpenVRConnector *pFocus )
+        {
+            COpenVRConnector *pPreviousFocus = m_pFocusConnector.exchange( pFocus );
+            if ( pPreviousFocus != pFocus )
+                MakeFocusDirty();
         }
 
         void VRInputThread()
@@ -957,170 +810,202 @@ namespace gamescope
             // I want WaitNextOverlayEvent (like SDL_WaitEvent) so this doesn't have to spin and sleep.
             while (true)
             {
-                for ( COpenVRPlane &plane : m_Planes )
                 {
-                    vr::VREvent_t vrEvent;
-                    while( vr::VROverlay()->PollNextOverlayEvent( plane.GetOverlay(), &vrEvent, sizeof( vrEvent ) ) )
+                    std::scoped_lock lock{ m_mutActiveConnectors };
+
+                    for ( COpenVRConnector *pConnector : m_pActiveConnectors )
                     {
-                        switch( vrEvent.eventType )
+                        bool bIsSteam = VirtualConnectorKeyIsSteam( pConnector->GetVirtualConnectorKey() );
+
+                        for ( COpenVRPlane &plane : pConnector->GetPlanes() )
                         {
-                            case vr::VREvent_OverlayClosed:
-                            case vr::VREvent_Quit:
+                            vr::VREvent_t vrEvent;
+                            while( vr::VROverlay()->PollNextOverlayEvent( plane.GetOverlay(), &vrEvent, sizeof( vrEvent ) ) )
                             {
-                                if ( !plane.IsSubview() )
+                                switch( vrEvent.eventType )
                                 {
-                                    raise( SIGTERM );
-                                }
-                                break;
-                            }
-
-                            case vr::VREvent_KeyboardCharInput:
-                            {
-                                if (m_pIME)
-                                {
-                                    type_text(m_pIME, vrEvent.data.keyboard.cNewInput);
-                                }
-                                break;
-                            }
-
-                            case vr::VREvent_MouseMove:
-                            {
-                                float flX = vrEvent.data.mouse.x / float( g_nOutputWidth );
-                                float flY = ( g_nOutputHeight - vrEvent.data.mouse.y ) / float( g_nOutputHeight );
-
-                                TouchClickMode eMode = GetTouchClickMode();
-                                // Always warp a cursor, even if it's invisible, so we get hover events.
-                                bool bAlwaysMoveCursor = eMode == TouchClickModes::Passthrough && cv_vr_always_warp_cursor;
-
-                                if ( eMode == TouchClickModes::Trackpad )
-                                {
-                                    glm::vec2 vOldTrackpadPos = m_vScreenTrackpadPos;
-                                    m_vScreenTrackpadPos = glm::vec2{ flX, flY };
-
-                                    if ( m_bMouseDown )
+                                    case vr::VREvent_OverlayClosed:
+                                    case vr::VREvent_Quit:
                                     {
-                                        glm::vec2 vDelta = ( m_vScreenTrackpadPos - vOldTrackpadPos );
-                                        // We are based off normalized coords, so we need to fix the aspect ratio
-                                        // or we get different sensitivities on X and Y.
-                                        vDelta.y *= ( (float)g_nOutputHeight / (float)g_nOutputWidth );
-
-                                        vDelta *= float( cv_vr_trackpad_sensitivity );
-
-                                        wlserver_lock();
-                                        wlserver_mousemotion( vDelta.x, vDelta.y, ++m_uFakeTimestamp );
-                                        wlserver_unlock();
-                                    }
-                                }
-                                else
-                                {
-                                    wlserver_lock();
-                                    wlserver_touchmotion( flX, flY , 0, ++m_uFakeTimestamp, bAlwaysMoveCursor );
-                                    wlserver_unlock();
-                                }
-                                break;
-                            }
-                            case vr::VREvent_MouseButtonUp:
-                            case vr::VREvent_MouseButtonDown:
-                            {
-                                float flX = vrEvent.data.mouse.x / float( g_nOutputWidth );
-                                float flY = ( g_nOutputHeight - vrEvent.data.mouse.y ) / float( g_nOutputHeight );
-
-                                uint64_t ulNow = get_time_in_nanos();
-
-                                if ( vrEvent.eventType == vr::VREvent_MouseButtonDown )
-                                {
-                                    m_ulMouseDownTime = ulNow;
-                                    m_bMouseDown = true;
-                                }
-                                else
-                                {
-                                    m_bMouseDown = false;
-                                }
-
-                                TouchClickMode eMode = GetTouchClickMode();
-                                if ( eMode == TouchClickModes::Trackpad )
-                                {
-                                    m_vScreenTrackpadPos = glm::vec2{ flX, flY };
-
-                                    if ( vrEvent.eventType == vr::VREvent_MouseButtonUp )
-                                    {
-                                        glm::vec2 vTotalDelta = ( m_vScreenTrackpadPos - m_vScreenStartTrackpadPos );
-                                        vTotalDelta.y *= ( (float)g_nOutputHeight / (float)g_nOutputWidth );
-                                        float flMaxAbsTotalDelta = std::max<float>( std::abs( vTotalDelta.x ), std::abs( vTotalDelta.y ) );
-
-                                        uint64_t ulClickTime = ulNow - m_ulMouseDownTime;
-                                        if ( ulClickTime <= cv_vr_trackpad_click_time && flMaxAbsTotalDelta <= cv_vr_trackpad_click_max_delta )
+                                        if ( bIsSteam )
                                         {
-                                            wlserver_lock();
-                                            wlserver_mousebutton( BTN_LEFT, true, ++m_uFakeTimestamp );
-                                            wlserver_unlock();
-
-                                            sleep_for_nanos( g_SteamCompMgrLimitedAppRefreshCycle + 1'000'000 );
-
-                                            wlserver_lock();
-                                            wlserver_mousebutton( BTN_LEFT, false, ++m_uFakeTimestamp );
-                                            wlserver_unlock();
+                                            if ( !plane.IsSubview() )
+                                            {
+                                                raise( SIGTERM );
+                                            }
                                         }
                                         else
                                         {
-                                            m_vScreenStartTrackpadPos = m_vScreenTrackpadPos;
+                                            // How do we quit a game?
+                                            // Do we?
                                         }
+                                        break;
                                     }
+
+                                    case vr::VREvent_KeyboardCharInput:
+                                    {
+                                        if (m_pIME)
+                                        {
+                                            type_text(m_pIME, vrEvent.data.keyboard.cNewInput);
+                                        }
+                                        break;
+                                    }
+
+                                    case vr::VREvent_MouseMove:
+                                    {
+                                        SetFocus( pConnector );
+                                        float flX = vrEvent.data.mouse.x / float( g_nOutputWidth );
+                                        float flY = ( g_nOutputHeight - vrEvent.data.mouse.y ) / float( g_nOutputHeight );
+
+                                        TouchClickMode eMode = GetTouchClickMode();
+                                        // Always warp a cursor, even if it's invisible, so we get hover events.
+                                        bool bAlwaysMoveCursor = eMode == TouchClickModes::Passthrough && cv_vr_always_warp_cursor;
+
+                                        if ( eMode == TouchClickModes::Trackpad )
+                                        {
+                                            glm::vec2 vOldTrackpadPos = m_vScreenTrackpadPos;
+                                            m_vScreenTrackpadPos = glm::vec2{ flX, flY };
+
+                                            if ( m_bMouseDown )
+                                            {
+                                                glm::vec2 vDelta = ( m_vScreenTrackpadPos - vOldTrackpadPos );
+                                                // We are based off normalized coords, so we need to fix the aspect ratio
+                                                // or we get different sensitivities on X and Y.
+                                                vDelta.y *= ( (float)g_nOutputHeight / (float)g_nOutputWidth );
+
+                                                vDelta *= float( cv_vr_trackpad_sensitivity );
+
+                                                wlserver_lock();
+                                                wlserver_mousemotion( vDelta.x, vDelta.y, ++m_uFakeTimestamp );
+                                                wlserver_unlock();
+                                            }
+                                        }
+                                        else
+                                        {
+                                            wlserver_lock();
+                                            wlserver_touchmotion( flX, flY , 0, ++m_uFakeTimestamp, bAlwaysMoveCursor );
+                                            wlserver_unlock();
+                                        }
+                                        break;
+                                    }
+                                    case vr::VREvent_FocusEnter:
+                                    {
+                                        SetFocus( pConnector );
+                                        break;
+                                    }
+                                    case vr::VREvent_MouseButtonUp:
+                                    case vr::VREvent_MouseButtonDown:
+                                    {
+                                        SetFocus( pConnector );
+
+                                        float flX = vrEvent.data.mouse.x / float( g_nOutputWidth );
+                                        float flY = ( g_nOutputHeight - vrEvent.data.mouse.y ) / float( g_nOutputHeight );
+
+                                        uint64_t ulNow = get_time_in_nanos();
+
+                                        if ( vrEvent.eventType == vr::VREvent_MouseButtonDown )
+                                        {
+                                            m_ulMouseDownTime = ulNow;
+                                            m_bMouseDown = true;
+                                        }
+                                        else
+                                        {
+                                            m_bMouseDown = false;
+                                        }
+
+                                        TouchClickMode eMode = GetTouchClickMode();
+                                        if ( eMode == TouchClickModes::Trackpad )
+                                        {
+                                            m_vScreenTrackpadPos = glm::vec2{ flX, flY };
+
+                                            if ( vrEvent.eventType == vr::VREvent_MouseButtonUp )
+                                            {
+                                                glm::vec2 vTotalDelta = ( m_vScreenTrackpadPos - m_vScreenStartTrackpadPos );
+                                                vTotalDelta.y *= ( (float)g_nOutputHeight / (float)g_nOutputWidth );
+                                                float flMaxAbsTotalDelta = std::max<float>( std::abs( vTotalDelta.x ), std::abs( vTotalDelta.y ) );
+
+                                                uint64_t ulClickTime = ulNow - m_ulMouseDownTime;
+                                                if ( ulClickTime <= cv_vr_trackpad_click_time && flMaxAbsTotalDelta <= cv_vr_trackpad_click_max_delta )
+                                                {
+                                                    wlserver_lock();
+                                                    wlserver_mousebutton( BTN_LEFT, true, ++m_uFakeTimestamp );
+                                                    wlserver_unlock();
+
+                                                    sleep_for_nanos( g_SteamCompMgrLimitedAppRefreshCycle + 1'000'000 );
+
+                                                    wlserver_lock();
+                                                    wlserver_mousebutton( BTN_LEFT, false, ++m_uFakeTimestamp );
+                                                    wlserver_unlock();
+                                                }
+                                                else
+                                                {
+                                                    m_vScreenStartTrackpadPos = m_vScreenTrackpadPos;
+                                                }
+                                            }
+                                        }
+                                        else
+                                        {
+                                            wlserver_lock();
+                                            if ( vrEvent.eventType == vr::VREvent_MouseButtonDown )
+                                                wlserver_touchdown( flX, flY, 0, ++m_uFakeTimestamp );
+                                            else
+                                                wlserver_touchup( 0, ++m_uFakeTimestamp );
+                                            wlserver_unlock();
+                                        }
+                                        break;
+                                    }
+
+                                    case vr::VREvent_ScrollSmooth:
+                                    {
+                                        SetFocus( pConnector );
+                                        float flX = -vrEvent.data.scroll.xdelta * m_flScrollSpeed;
+                                        float flY = -vrEvent.data.scroll.ydelta * m_flScrollSpeed;
+                                        wlserver_lock();
+                                        wlserver_mousewheel( flX, flY, ++m_uFakeTimestamp );
+                                        wlserver_unlock();
+                                        break;
+                                    }
+
+                                    case vr::VREvent_ButtonPress:
+                                    {
+                                        SetFocus( pConnector );
+                                        vr::EVRButtonId button = (vr::EVRButtonId)vrEvent.data.controller.button;
+
+                                        if (button != vr::k_EButton_Steam && button != vr::k_EButton_QAM)
+                                            break;
+
+                                        if (button == vr::k_EButton_Steam)
+                                            openvr_log.infof("STEAM button pressed.");
+                                        else
+                                            openvr_log.infof("QAM button pressed.");
+
+                                        wlserver_open_steam_menu( button == vr::k_EButton_QAM );
+                                        break;
+                                    }
+
+                                    case vr::VREvent_OverlayShown:
+                                    case vr::VREvent_OverlayHidden:
+                                    {
+                                        // Only handle this for the base plane.
+                                        // Subviews can be hidden if we hide them ourselves,
+                                        // or for other reasons.
+                                        if ( !plane.IsSubview() )
+                                        {
+                                            if ( vrEvent.eventType == vr::VREvent_OverlayShown )
+                                                m_nOverlaysVisible++;
+                                            else
+                                                m_nOverlaysVisible--;
+
+                                            m_nOverlaysVisible.notify_all();
+                                            assert( m_nOverlaysVisible >= 0 );
+                                        }
+                                        break;
+                                    }
+
+                                    default:
+                                        break;
                                 }
-                                else
-                                {
-                                    wlserver_lock();
-                                    if ( vrEvent.eventType == vr::VREvent_MouseButtonDown )
-                                        wlserver_touchdown( flX, flY, 0, ++m_uFakeTimestamp );
-                                    else
-                                        wlserver_touchup( 0, ++m_uFakeTimestamp );
-                                    wlserver_unlock();
-                                }
-                                break;
                             }
-
-                            case vr::VREvent_ScrollSmooth:
-                            {
-                                float flX = -vrEvent.data.scroll.xdelta * m_flScrollSpeed;
-                                float flY = -vrEvent.data.scroll.ydelta * m_flScrollSpeed;
-                                wlserver_lock();
-                                wlserver_mousewheel( flX, flY, ++m_uFakeTimestamp );
-                                wlserver_unlock();
-                                break;
-                            }
-
-                            case vr::VREvent_ButtonPress:
-                            {
-                                vr::EVRButtonId button = (vr::EVRButtonId)vrEvent.data.controller.button;
-
-                                if (button != vr::k_EButton_Steam && button != vr::k_EButton_QAM)
-                                    break;
-
-                                if (button == vr::k_EButton_Steam)
-                                    openvr_log.infof("STEAM button pressed.");
-                                else
-                                    openvr_log.infof("QAM button pressed.");
-
-                                wlserver_open_steam_menu( button == vr::k_EButton_QAM );
-                                break;
-                            }
-
-                            case vr::VREvent_OverlayShown:
-                            case vr::VREvent_OverlayHidden:
-                            {
-                                // Only handle this for the base plane.
-                                // Subviews can be hidden if we hide them ourselves,
-                                // or for other reasons.
-                                if ( !plane.IsSubview() )
-                                {
-                                    m_bOverlayVisible = vrEvent.eventType == vr::VREvent_OverlayShown;
-                                    m_bOverlayVisible.notify_all();
-                                }
-                                break;
-                            }
-
-                            default:
-                                break;
                         }
                     }
                 }
@@ -1128,7 +1013,6 @@ namespace gamescope
             }
         }
 
-        CVROverlayConnector m_Connector;
         std::string m_szOverlayKey;
         const char *m_pchOverlayName = nullptr;
         const char *m_pchOverlayIcon = nullptr;
@@ -1138,19 +1022,18 @@ namespace gamescope
         bool m_bEnableControlBarKeyboard = false;
         bool m_bEnableControlBarClose = false;
         bool m_bModal = false;
-        std::atomic<bool> m_bRelativeMouse = false;
         float m_flPhysicalWidth = 2.0f;
         float m_flPhysicalCurvature = 0.0f;
         float m_flPhysicalPreCurvePitch = 0.0f;
         float m_flScrollSpeed = 1.0f;
 
-        COpenVRPlane m_Planes[8];
+        // TODO: Restructure and remove the need for this.
 
         wlserver_input_method *m_pIME = nullptr;
 
         OwningRc<CVulkanTexture> m_pBlackTexture;
 
-        std::atomic<bool> m_bOverlayVisible = { false };
+        std::atomic<int> m_nOverlaysVisible = { 0 };
 
         vr::IVRIPCResourceManagerClient *m_pIPCResourceManager = nullptr;
         std::unordered_map<uint32_t, std::vector<uint64_t>> m_FormatModifiers;
@@ -1162,7 +1045,310 @@ namespace gamescope
         // Fake "trackpad" tracking for the whole overlay panel.
         glm::vec2 m_vScreenTrackpadPos{};
         glm::vec2 m_vScreenStartTrackpadPos{};
+
+        friend COpenVRConnector;
+        std::vector<COpenVRConnector*> m_pActiveConnectors;
+        std::mutex m_mutActiveConnectors;
+        std::atomic<COpenVRConnector *> m_pFocusConnector;
 	};
+
+    ////////////////////
+    // COpenVRConnector
+    ////////////////////
+
+    COpenVRConnector::COpenVRConnector( COpenVRBackend *pBackend, uint64_t ulVirtualConnectorKey )
+        : CBaseBackendConnector{ ulVirtualConnectorKey }
+        , m_pBackend{ pBackend }
+        , m_Planes{ this, this, this, this, this, this, this, this }
+    {
+
+    }
+
+    COpenVRConnector::~COpenVRConnector()
+    {
+        std::scoped_lock lock{ m_pBackend->m_mutActiveConnectors };
+
+        auto iter = m_pBackend->m_pActiveConnectors.begin();
+        for ( ; iter != m_pBackend->m_pActiveConnectors.end(); iter++ )
+        {
+            if ( *iter == this )
+                break;
+        }
+        if ( iter != m_pBackend->m_pActiveConnectors.end() )
+            m_pBackend->m_pActiveConnectors.erase( iter );
+
+        COpenVRConnector *pThis = this;
+        m_pBackend->m_pFocusConnector.compare_exchange_strong( pThis, nullptr );
+    }
+
+    GamescopeScreenType COpenVRConnector::GetScreenType() const
+    {
+        return GAMESCOPE_SCREEN_TYPE_INTERNAL;
+    }
+    GamescopePanelOrientation COpenVRConnector::GetCurrentOrientation() const
+    {
+        return GAMESCOPE_PANEL_ORIENTATION_0;
+    }
+    bool COpenVRConnector::SupportsHDR() const
+    {
+        return false;
+    }
+    bool COpenVRConnector::IsHDRActive() const
+    {
+        return false;
+    }
+    const BackendConnectorHDRInfo &COpenVRConnector::GetHDRInfo() const
+    {
+        return m_HDRInfo;
+    }
+    bool COpenVRConnector::IsVRRActive() const
+    {
+        return false;
+    }
+    std::span<const BackendMode> COpenVRConnector::GetModes() const
+    {
+        return std::span<const BackendMode>{};
+    }
+
+    bool COpenVRConnector::SupportsVRR() const
+    {
+        return false;
+    }
+
+    std::span<const uint8_t> COpenVRConnector::GetRawEDID() const
+    {
+        return std::span<const uint8_t>{ m_FakeEdid.begin(), m_FakeEdid.end() };
+    }
+    std::span<const uint32_t> COpenVRConnector::GetValidDynamicRefreshRates() const
+    {
+        return std::span<const uint32_t>{};
+    }
+
+    void COpenVRConnector::GetNativeColorimetry(
+        bool bHDR10,
+        displaycolorimetry_t *displayColorimetry, EOTF *displayEOTF,
+        displaycolorimetry_t *outputEncodingColorimetry, EOTF *outputEncodingEOTF ) const
+    {
+        *displayColorimetry = displaycolorimetry_709;
+        *displayEOTF = EOTF_Gamma22;
+        *outputEncodingColorimetry = displaycolorimetry_709;
+        *outputEncodingEOTF = EOTF_Gamma22;
+    }
+
+    const char *COpenVRConnector::GetName() const
+    {
+        return "OpenVR";
+    }
+    const char *COpenVRConnector::GetMake() const
+    {
+        return "Gamescope";
+    }
+    const char *COpenVRConnector::GetModel() const
+    {
+        return "Virtual Display";
+    }
+
+    VBlankScheduleTime COpenVRConnector::FrameSync()
+    {
+        m_pBackend->WaitUntilVisible();
+
+        if ( vr::VROverlay()->WaitFrameSync( ~0u ) != vr::VROverlayError_None )
+            openvr_log.errorf( "WaitFrameSync failed!" );
+
+        uint64_t ulNow = get_time_in_nanos();
+        return VBlankScheduleTime
+        {
+            .ulTargetVBlank  = ulNow + 3'000'000, // Not right. just a stop-gap for now.
+            .ulScheduledWakeupPoint = ulNow,
+        };
+    }
+
+    int COpenVRConnector::Present( const FrameInfo_t *pFrameInfo, bool bAsync )
+    {
+        bool bNeedsFullComposite = false;
+
+        // TODO: Dedupe some of this composite check code between us and drm.cpp
+        bool bLayer0ScreenSize = close_enough(pFrameInfo->layers[0].scale.x, 1.0f) && close_enough(pFrameInfo->layers[0].scale.y, 1.0f);
+
+        bool bNeedsCompositeFromFilter = (g_upscaleFilter == GamescopeUpscaleFilter::NEAREST || g_upscaleFilter == GamescopeUpscaleFilter::PIXEL) && !bLayer0ScreenSize;
+
+        bNeedsFullComposite |= cv_composite_force;
+        bNeedsFullComposite |= pFrameInfo->useFSRLayer0;
+        bNeedsFullComposite |= pFrameInfo->useNISLayer0;
+        bNeedsFullComposite |= pFrameInfo->blurLayer0;
+        bNeedsFullComposite |= bNeedsCompositeFromFilter;
+        bNeedsFullComposite |= g_bColorSliderInUse;
+        bNeedsFullComposite |= pFrameInfo->bFadingOut;
+        bNeedsFullComposite |= !g_reshade_effect.empty();
+        bNeedsFullComposite |= !m_pBackend->UsesModifiers();
+
+        if ( g_bOutputHDREnabled )
+            bNeedsFullComposite |= g_bHDRItmEnable;
+
+        if ( !m_pBackend->SupportsColorManagement() )
+            bNeedsFullComposite |= ColorspaceIsHDR( pFrameInfo->layers[0].colorspace );
+
+        bNeedsFullComposite |= !!(g_uCompositeDebug & CompositeDebugFlag::Heatmap);
+
+        if ( !bNeedsFullComposite )
+        {
+            bool bNeedsBacking = true;
+            if ( pFrameInfo->layerCount >= 1 )
+            {
+                if ( pFrameInfo->layers[0].isScreenSize() && ( !pFrameInfo->layers[0].hasAlpha() || cv_vr_transparent_backing ) )
+                    bNeedsBacking = false;
+            }
+
+            uint32_t uCurrentPlane = 0;
+            if ( bNeedsBacking )
+            {
+                COpenVRPlane *pPlane = &m_Planes[uCurrentPlane++];
+                pPlane->Present(
+                    OpenVRPlaneState
+                    {
+                        .pTexture    = m_pBackend->GetBlackTexture(),
+                        .flSrcWidth  = double( g_nOutputWidth ),
+                        .flSrcHeight = double( g_nOutputHeight ),
+                        .nDstWidth   = int32_t( g_nOutputWidth ),
+                        .nDstHeight  = int32_t( g_nOutputHeight ),
+                        .eColorspace = GAMESCOPE_APP_TEXTURE_COLORSPACE_PASSTHRU,
+                        .bOpaque     = !cv_vr_transparent_backing,
+                        .flAlpha     = cv_vr_transparent_backing ? 0.0f : 1.0f,
+                    } );
+            }
+
+            for ( int i = 0; i < 8 && uCurrentPlane < 8; i++ )
+                m_Planes[uCurrentPlane++].Present( i < pFrameInfo->layerCount ? &pFrameInfo->layers[i] : nullptr );
+        }
+        else
+        {
+            std::optional oCompositeResult = vulkan_composite( (FrameInfo_t *)pFrameInfo, nullptr, false );
+            if ( !oCompositeResult )
+            {
+                openvr_log.errorf( "vulkan_composite failed" );
+                return -EINVAL;
+            }
+
+            vulkan_wait( *oCompositeResult, true );
+
+            FrameInfo_t::Layer_t compositeLayer{};
+            compositeLayer.scale.x = 1.0;
+            compositeLayer.scale.y = 1.0;
+            compositeLayer.opacity = 1.0;
+            compositeLayer.zpos = g_zposBase;
+
+            compositeLayer.tex = vulkan_get_last_output_image( false, false );
+            compositeLayer.applyColorMgmt = false;
+
+            compositeLayer.filter = GamescopeUpscaleFilter::NEAREST;
+            compositeLayer.ctm = nullptr;
+            compositeLayer.colorspace = pFrameInfo->outputEncodingEOTF == EOTF_PQ ? GAMESCOPE_APP_TEXTURE_COLORSPACE_HDR10_PQ : GAMESCOPE_APP_TEXTURE_COLORSPACE_SRGB;
+
+            GetPrimaryPlane()->Present( &compositeLayer );
+
+            for ( int i = 1; i < 8; i++ )
+                m_Planes[i].Present( nullptr );
+        }
+
+
+        GetVBlankTimer().UpdateWasCompositing( true );
+        GetVBlankTimer().UpdateLastDrawTime( get_time_in_nanos() - g_SteamCompMgrVBlankTime.ulWakeupTime );
+
+        m_pBackend->PollState();
+
+        return 0;
+    }
+
+    ///////////////////
+    // INestedHints
+    ///////////////////
+
+    void COpenVRConnector::SetCursorImage( std::shared_ptr<INestedHints::CursorInfo> info )
+    {
+    }
+    void COpenVRConnector::SetRelativeMouseMode( bool bRelative )
+    {
+        if ( bRelative != m_bRelativeMouse )
+        {
+            for ( COpenVRPlane &plane : m_Planes )
+            {
+                vr::VROverlay()->SetOverlayFlag( plane.GetOverlay(), vr::VROverlayFlags_HideLaserIntersection, cv_vr_trackpad_hide_laser && bRelative );
+            }
+            m_bRelativeMouse = bRelative;
+        }
+    }
+    void COpenVRConnector::SetVisible( bool bVisible )
+    {
+        vr::VROverlay()->SetOverlayFlag( GetPrimaryPlane()->GetOverlay(), vr::VROverlayFlags_VisibleInDashboard, bVisible );
+    }
+    void COpenVRConnector::SetTitle( std::shared_ptr<std::string> szTitle )
+    {
+        if ( !m_pBackend->m_bExplicitOverlayName )
+            vr::VROverlay()->SetOverlayName( GetPrimaryPlane()->GetOverlay(), szTitle ? szTitle->c_str() : m_pBackend->GetOverlayName() );
+    }
+    void COpenVRConnector::SetIcon( std::shared_ptr<std::vector<uint32_t>> uIconPixels )
+    {
+        if ( cv_vr_use_window_icons && uIconPixels && uIconPixels->size() >= 3 )
+        {
+            const uint32_t uWidth = (*uIconPixels)[0];
+            const uint32_t uHeight = (*uIconPixels)[1];
+
+            struct rgba_t
+            {
+                uint8_t r,g,b,a;
+            };
+
+            for ( uint32_t& val : *uIconPixels )
+            {
+                rgba_t rgb = *((rgba_t*)&val);
+                std::swap(rgb.r, rgb.b);
+                val = *((uint32_t*)&rgb);
+            }
+
+            vr::VROverlay()->SetOverlayRaw( GetPrimaryPlane()->GetOverlayThumbnail(), &(*uIconPixels)[2], uWidth, uHeight, sizeof(uint32_t) );
+        }
+        else if ( m_pBackend->GetOverlayIcon() )
+        {
+            vr::VROverlay()->SetOverlayFromFile( GetPrimaryPlane()->GetOverlayThumbnail(), m_pBackend->GetOverlayIcon() );
+        }
+        else
+        {
+            vr::VROverlay()->ClearOverlayTexture( GetPrimaryPlane()->GetOverlayThumbnail() );
+        }
+    }
+
+    void COpenVRConnector::SetSelection( std::shared_ptr<std::string> szContents, GamescopeSelection eSelection )
+    {
+        // Do nothing
+    }
+
+    bool COpenVRConnector::UpdateEdid()
+    {
+        m_FakeEdid = GenerateSimpleEdid( g_nNestedWidth, g_nNestedHeight );
+
+        return true;
+    }
+
+
+    bool COpenVRConnector::Init()
+    {
+        m_bNudgeToVisible = m_pBackend->ShouldNudgeToVisible();
+
+        for ( uint32_t i = 0; i < 8; i++ )
+        {
+            bool bSuccess = m_Planes[i].Init( i == 0 ? nullptr : &m_Planes[0], i == 0 ? nullptr : &m_Planes[ i - 1 ] );
+            if ( !bSuccess )
+                return false;
+        }
+
+        UpdateEdid();
+        m_pBackend->HackUpdatePatchedEdid();
+
+        if ( g_bForceRelativeMouse )
+            this->SetRelativeMouseMode( true );
+
+        return true;
+    }
 
 	/////////////////////////
 	// COpenVRFb
@@ -1186,12 +1372,18 @@ namespace gamescope
 	// COpenVRPlane
 	/////////////////////////
 
-    COpenVRPlane::COpenVRPlane( COpenVRBackend *pBackend )
-        : m_pBackend{ pBackend }
+    COpenVRPlane::COpenVRPlane( COpenVRConnector *pConnector )
+        : m_pConnector{ pConnector }
+        , m_pBackend{ pConnector->GetBackend() }
     {
     }
     COpenVRPlane::~COpenVRPlane()
     {
+        if ( m_hOverlayThumbnail != vr::k_ulOverlayHandleInvalid )
+            vr::VROverlay()->DestroyOverlay( m_hOverlayThumbnail );
+
+        if ( m_hOverlay != vr::k_ulOverlayHandleInvalid )
+            vr::VROverlay()->DestroyOverlay( m_hOverlay );
     }
 
     bool COpenVRPlane::Init( COpenVRPlane *pParent, COpenVRPlane *pSiblingBelow )
@@ -1203,10 +1395,26 @@ namespace gamescope
             m_uSortOrder = pSiblingBelow->GetSortOrder() + 1;
         }
 
+        std::string sOverlayKey = m_pBackend->GetOverlayKey();
+
+        VirtualConnectorStrategy eStrategy = cv_backend_virtual_connector_strategy;
+        if ( !VirtualConnectorStrategyIsSingleOutput( eStrategy ) )
+        {
+            uint64_t ulKey = m_pConnector->GetVirtualConnectorKey();
+            bool bIsSteam = VirtualConnectorKeyIsSteam( ulKey );
+            if ( !bIsSteam )
+            {
+                sOverlayKey += ".app";
+                sOverlayKey += std::to_string( m_pConnector->GetVirtualConnectorKey() );
+            }
+        }
+
         if ( !m_bIsSubview )
         {
+            m_sDashboardOverlayKey = sOverlayKey;
+
             vr::VROverlay()->CreateDashboardOverlay(
-                m_pBackend->GetOverlayKey(),
+                sOverlayKey.c_str(),
                 m_pBackend->GetOverlayName(),
                 &m_hOverlay, &m_hOverlayThumbnail );
 
@@ -1216,7 +1424,7 @@ namespace gamescope
             vr::VROverlay()->SetOverlayFlag( m_hOverlay, vr::VROverlayFlags_WantsModalBehavior,	      m_pBackend->IsModal() );
             vr::VROverlay()->SetOverlayFlag( m_hOverlay, vr::VROverlayFlags_SendVRSmoothScrollEvents, true );
             vr::VROverlay()->SetOverlayFlag( m_hOverlay, vr::VROverlayFlags_VisibleInDashboard,       false );
-            vr::VROverlay()->SetOverlayFlag( m_hOverlay, vr::VROverlayFlags_HideLaserIntersection,    cv_vr_trackpad_hide_laser && m_pBackend->IsRelativeMouse() );
+            vr::VROverlay()->SetOverlayFlag( m_hOverlay, vr::VROverlayFlags_HideLaserIntersection,    cv_vr_trackpad_hide_laser && m_pConnector->IsRelativeMouse() );
 
             vr::VROverlay()->SetOverlayWidthInMeters( m_hOverlay,  m_pBackend->GetPhysicalWidth() );
             vr::VROverlay()->SetOverlayCurvature	( m_hOverlay,  m_pBackend->GetPhysicalCurvature() );
@@ -1233,7 +1441,7 @@ namespace gamescope
         }
         else
         {
-            std::string szSubviewName = m_pBackend->GetOverlayKey() + std::string(".layer") + std::to_string( (uintptr_t)this );
+            std::string szSubviewName = sOverlayKey + std::string(".layer") + std::to_string( m_uSortOrder );
             vr::VROverlay()->CreateSubviewOverlay( pParent->GetOverlay(), szSubviewName.c_str(), "Gamescope Layer", &m_hOverlay );
         }
 
@@ -1257,7 +1465,7 @@ namespace gamescope
 
             if ( m_pBackend->UsesModifiers() )
             {
-                vr::VROverlay()->SetOverlayFlag( m_hOverlay, vr::VROverlayFlags_IgnoreTextureAlpha,	oState->bOpaque || !DRMFormatHasAlpha( oState->pTexture->drmFormat() ) );
+                vr::VROverlay()->SetOverlayFlag( m_hOverlay, vr::VROverlayFlags_IgnoreTextureAlpha,	oState->bOpaque || !DRMFormatHasAlpha( oState->pTexture->drmFormat() ) || cv_vr_debug_force_opaque );
 
                 vr::HmdVector2_t vMouseScale =
                 {
@@ -1307,9 +1515,9 @@ namespace gamescope
                 vr::VROverlay()->SetOverlayTexture( m_hOverlay, &texture );
             }
 
-            if ( !m_bIsSubview && m_pBackend->ConsumeNudgeToVisible() )
+            if ( !m_bIsSubview && m_pConnector->ConsumeNudgeToVisible() )
             {
-                vr::VROverlay()->ShowDashboard( m_pBackend->GetOverlayKey() );
+                vr::VROverlay()->ShowDashboard( m_sDashboardOverlayKey.c_str() );
             }
         }
         else
