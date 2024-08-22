@@ -34,16 +34,16 @@ namespace gamescope
     {
         enum VirtualConnectorStrategy : uint32_t
         {
-            SingleApplication = 0x1,
-            SteamControlled   = 0x2,
-            PerAppId          = 0x4,
-            PerWindow         = 0x8,
+            SingleApplication,
+            SteamControlled,
+            PerAppId,
+            PerWindow,
 
             Count,
         };
     }
     using VirtualConnectorStrategy = VirtualConnectorStrategies::VirtualConnectorStrategy;
-    using VirtualConnectorKey_t = uint64_t; 
+    using VirtualConnectorKey_t = uint64_t;
     extern ConVar<VirtualConnectorStrategy> cv_backend_virtual_connector_strategy;
 
     static constexpr bool VirtualConnectorStrategyIsSingleOutput( VirtualConnectorStrategy eStrategy )
@@ -64,6 +64,19 @@ namespace gamescope
     static inline bool VirtualConnectorKeyIsSteam( VirtualConnectorKey_t ulKey )
     {
         return VirtualConnectorInSteamPerAppState() && ulKey == 769;
+    }
+
+    static inline std::string_view VirtualConnectorStrategyToString( VirtualConnectorStrategy eStrategy )
+    {
+        switch ( eStrategy )
+        {
+            case VirtualConnectorStrategies::SingleApplication: return "SingleApplication";
+            case VirtualConnectorStrategies::SteamControlled: return "SteamControlled";
+            case VirtualConnectorStrategies::PerAppId: return "PerAppId";
+            case VirtualConnectorStrategies::PerWindow: return "PerWindow";
+            default:
+                return "Unknown";
+        }
     }
 
 

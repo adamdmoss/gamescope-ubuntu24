@@ -115,6 +115,7 @@ const struct option *gamescope_options = (struct option[]){
 	{ "cursor", required_argument, nullptr, 0 },
 	{ "cursor-hotspot", required_argument, nullptr, 0 },
 	{ "cursor-scale-height", required_argument, nullptr, 0 },
+	{ "virtual-connector-strategy", required_argument, nullptr, 0 },
 	{ "ready-fd", required_argument, nullptr, 'R' },
 	{ "stats-path", required_argument, nullptr, 'T' },
 	{ "hide-cursor-delay", required_argument, nullptr, 'C' },
@@ -192,6 +193,7 @@ const char usage[] =
 	"  --force-orientation            rotate the internal display (left, right, normal, upsidedown)\n"
 	"  --force-windows-fullscreen     force windows inside of gamescope to be the size of the nested display (fullscreen)\n"
 	"  --cursor-scale-height          if specified, sets a base output height to linearly scale the cursor against.\n"
+	"  --virtual-connector-strategy   Specifies how we should make virtual connectors.\n"
 	"  --hdr-enabled                  enable HDR output (needs Gamescope WSI layer enabled for support from clients)\n"
 	"                                 If this is not set, and there is a HDR client, it will be tonemapped SDR.\n"
 	"  --sdr-gamut-wideness           Set the 'wideness' of the gamut for SDR comment. 0 - 1.\n"
@@ -764,7 +766,7 @@ int main(int argc, char **argv)
 				} else if (strcmp(opt_name, "force-grab-cursor") == 0) {
 					g_bForceRelativeMouse = true;
 				} else if (strcmp(opt_name, "display-index") == 0) {
-					g_nNestedDisplayIndex = atoi( optarg );
+					g_nNestedDisplayIndex = atoi( optarg );	
 				} else if (strcmp(opt_name, "adaptive-sync") == 0) {
 					cv_adaptive_sync = true;
 				} else if (strcmp(opt_name, "expose-wayland") == 0) {
@@ -775,6 +777,17 @@ int main(int argc, char **argv)
 					g_nCursorScaleHeight = atoi(optarg);
 				} else if (strcmp(opt_name, "mangoapp") == 0) {
 					g_bLaunchMangoapp = true;
+				} else if (strcmp(opt_name, "virtual-connector-strategy") == 0) {
+					for ( uint32_t i = 0; i < gamescope::VirtualConnectorStrategies::Count; i++ )
+					{
+						gamescope::VirtualConnectorStrategy eStrategy =
+							static_cast<gamescope::VirtualConnectorStrategy>( i );
+						if ( optarg == gamescope::VirtualConnectorStrategyToString( eStrategy ) )
+						{
+							gamescope::cv_backend_virtual_connector_strategy = eStrategy;
+								
+						}
+					}
 				}
 				break;
 			case '?':
