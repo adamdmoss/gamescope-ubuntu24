@@ -414,6 +414,8 @@ namespace gamescope
                         opt_name = gamescope_options[opt_index].name;
                         if (strcmp(opt_name, "vr-overlay-key") == 0) {
                             m_szOverlayKey = optarg;
+                        } else if (strcmp(opt_name, "vr-app-overlay-key") == 0) {
+                            m_szAppOverlayKey = optarg;
                         } else if (strcmp(opt_name, "vr-overlay-explicit-name") == 0) {
                             m_pchOverlayName = optarg;
                             m_bExplicitOverlayName = true;
@@ -793,6 +795,7 @@ namespace gamescope
         }
 
         const char *GetOverlayKey() const { return m_szOverlayKey.c_str(); }
+        const char *GetAppOverlayKey() const { return m_szAppOverlayKey.c_str(); }
         const char *GetOverlayName() const { return m_pchOverlayName; }
         const char *GetOverlayIcon() const { return m_pchOverlayIcon; }
         bool ShouldEnableControlBar() const { return m_bEnableControlBar; }
@@ -1078,6 +1081,7 @@ namespace gamescope
         }
 
         std::string m_szOverlayKey;
+        std::string m_szAppOverlayKey;
         const char *m_pchOverlayName = nullptr;
         const char *m_pchOverlayIcon = nullptr;
         bool m_bExplicitOverlayName = false;
@@ -1506,7 +1510,16 @@ namespace gamescope
             bool bIsSteam = VirtualConnectorKeyIsSteam( ulKey );
             if ( !bIsSteam )
             {
-                sOverlayKey += ".app";
+                const char *pszAppOverlayKey = m_pBackend->GetAppOverlayKey();
+                if ( pszAppOverlayKey && *pszAppOverlayKey )
+                {
+                    sOverlayKey = pszAppOverlayKey;
+                    sOverlayKey += ".";
+                }
+                else
+                {
+                    sOverlayKey += ".app.";
+                }
                 sOverlayKey += std::to_string( m_pConnector->GetVirtualConnectorKey() );
             }
         }

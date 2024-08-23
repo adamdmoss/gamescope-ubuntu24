@@ -94,6 +94,7 @@ const struct option *gamescope_options = (struct option[]){
 	// openvr options
 #if HAVE_OPENVR
 	{ "vr-overlay-key", required_argument, nullptr, 0 },
+	{ "vr-app-overlay-key", required_argument, nullptr, 0 },
 	{ "vr-overlay-explicit-name", required_argument, nullptr, 0 },
 	{ "vr-overlay-default-name", required_argument, nullptr, 0 },
 	{ "vr-overlay-icon", required_argument, nullptr, 0 },
@@ -224,6 +225,7 @@ const char usage[] =
 #if HAVE_OPENVR
 	"VR mode options:\n"
 	"  --vr-overlay-key                         Sets the SteamVR overlay key to this string\n"
+	"  --vr-app-overlay-key						Sets the SteamVR overlay key to use for child apps\n"
 	"  --vr-overlay-explicit-name               Force the SteamVR overlay name to always be this string\n"
 	"  --vr-overlay-default-name                Sets the fallback SteamVR overlay name when there is no window title\n"
 	"  --vr-overlay-icon                        Sets the SteamVR overlay icon to this file\n"
