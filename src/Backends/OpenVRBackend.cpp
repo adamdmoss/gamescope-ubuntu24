@@ -79,6 +79,8 @@ namespace vr
     const EVRButtonId k_EButton_QAM = (EVRButtonId)(51);
 }
 
+uint32_t get_appid_from_pid( pid_t pid );
+
 ///////////////////////////////////////////////
 // Josh:
 // GetVulkanInstanceExtensionsRequired and GetVulkanDeviceExtensionsRequired return *space separated* exts :(
@@ -308,6 +310,28 @@ namespace gamescope
         bool ConsumeNudgeToVisible() { return std::exchange( m_bNudgeToVisible, false ); }
         bool IsRelativeMouse() const { return m_bRelativeMouse; }
 
+        // Thread safe.
+        bool IsVisible() const
+        {
+            return m_bOverlayShown || m_bSceneAppVisible;
+        }
+
+        // Only called from event thread
+        void MarkOverlayShown( bool bShown )
+        {
+            m_bOverlayShown = bShown;
+            UpdateVisibility( "Overlay Visibility" );
+        }
+
+        // Only called from event thread
+        void MarkSceneAppShown( bool bShown )
+        {
+            m_bSceneAppVisible = bShown;
+            UpdateVisibility( "Scene App Visibility" );
+        }
+
+        void UpdateVisibility( const char *pszReason );
+
     private:
         COpenVRBackend *m_pBackend = nullptr;
         COpenVRPlane m_Planes[8];
@@ -317,6 +341,10 @@ namespace gamescope
 
         bool m_bNudgeToVisible = false;
         std::atomic<bool> m_bRelativeMouse = false;
+
+        bool m_bWasVisible = false; // Event thread only
+        std::atomic<bool> m_bOverlayShown = { false };
+        std::atomic<bool> m_bSceneAppVisible = { false };
     };
 
 	class COpenVRBackend final : public CBaseBackend
@@ -844,6 +872,46 @@ namespace gamescope
                                         break;
                                     }
 
+                                    case vr::VREvent_SceneApplicationChanged:
+                                    {
+                                        if ( m_uCurrentScenePid != vrEvent.data.process.pid )
+                                        {
+                                            m_uCurrentScenePid = vrEvent.data.process.pid;
+                                            m_uCurrentSceneAppId = get_appid_from_pid( m_uCurrentScenePid );
+
+                                            openvr_log.debugf( "SceneApplicationChanged -> pid: %u appid: %u", m_uCurrentScenePid, m_uCurrentSceneAppId );
+
+                                            std::optional<VirtualConnectorKey_t> oulNewSceneAppVirtualConnectorKey;
+                                            if ( cv_backend_virtual_connector_strategy == VirtualConnectorStrategies::PerAppId )
+                                            {
+                                                oulNewSceneAppVirtualConnectorKey = m_uCurrentSceneAppId;
+                                            }
+
+                                            if ( ( oulNewSceneAppVirtualConnectorKey || m_oulCurrentSceneVirtualConnectorKey ) &&
+                                                ( oulNewSceneAppVirtualConnectorKey != m_oulCurrentSceneVirtualConnectorKey ) )
+                                            {
+                                                for ( COpenVRConnector *pOtherConnector : m_pActiveConnectors )
+                                                {
+                                                    if ( oulNewSceneAppVirtualConnectorKey )
+                                                    {
+                                                        if ( pOtherConnector->GetVirtualConnectorKey() == *oulNewSceneAppVirtualConnectorKey )
+                                                            pOtherConnector->MarkSceneAppShown( true );
+                                                    }
+
+                                                    if ( m_oulCurrentSceneVirtualConnectorKey )
+                                                    {
+                                                        if ( pOtherConnector->GetVirtualConnectorKey() == *m_oulCurrentSceneVirtualConnectorKey )
+                                                            pOtherConnector->MarkSceneAppShown( false );
+                                                    }
+                                                }
+                                            }
+
+                                            m_oulCurrentSceneVirtualConnectorKey = oulNewSceneAppVirtualConnectorKey;
+                                        }
+
+                                        break;
+                                    }
+
                                     case vr::VREvent_KeyboardCharInput:
                                     {
                                         if (m_pIME)
@@ -993,15 +1061,7 @@ namespace gamescope
                                         // or for other reasons.
                                         if ( !plane.IsSubview() )
                                         {
-                                            int nNewOverlayVisibleCount;
-                                            if ( vrEvent.eventType == vr::VREvent_OverlayShown )
-                                                nNewOverlayVisibleCount = ++m_nOverlaysVisible;
-                                            else
-                                                nNewOverlayVisibleCount = --m_nOverlaysVisible;
-
-                                            openvr_log.debugf( "nNewOverlayVisibleCount: %d", nNewOverlayVisibleCount );
-                                            m_nOverlaysVisible.notify_all();
-                                            assert( m_nOverlaysVisible >= 0 );
+                                            pConnector->MarkOverlayShown( vrEvent.eventType == vr::VREvent_OverlayShown );
                                         }
                                         break;
                                     }
@@ -1050,6 +1110,10 @@ namespace gamescope
         glm::vec2 m_vScreenTrackpadPos{};
         glm::vec2 m_vScreenStartTrackpadPos{};
 
+        uint32_t m_uCurrentScenePid = -1;
+        uint32_t m_uCurrentSceneAppId = 0;
+        std::optional<uint64_t> m_oulCurrentSceneVirtualConnectorKey;
+
         friend COpenVRConnector;
         std::vector<COpenVRConnector*> m_pActiveConnectors;
         std::mutex m_mutActiveConnectors;
@@ -1071,6 +1135,9 @@ namespace gamescope
     COpenVRConnector::~COpenVRConnector()
     {
         std::scoped_lock lock{ m_pBackend->m_mutActiveConnectors };
+
+        MarkSceneAppShown( false );
+        MarkOverlayShown( false );
 
         auto iter = m_pBackend->m_pActiveConnectors.begin();
         for ( ; iter != m_pBackend->m_pActiveConnectors.end(); iter++ )
@@ -1336,6 +1403,8 @@ namespace gamescope
 
     bool COpenVRConnector::Init()
     {
+        openvr_log.debugf( "New connector! -> ulKey: %lu", GetVirtualConnectorKey() );
+
         m_bNudgeToVisible = m_pBackend->ShouldNudgeToVisible();
 
         for ( uint32_t i = 0; i < 8; i++ )
@@ -1350,8 +1419,37 @@ namespace gamescope
 
         if ( g_bForceRelativeMouse )
             this->SetRelativeMouseMode( true );
+        
+        if ( m_pBackend->m_oulCurrentSceneVirtualConnectorKey &&
+             GetVirtualConnectorKey() == *m_pBackend->m_oulCurrentSceneVirtualConnectorKey )
+        {
+            MarkSceneAppShown( true );
+        }
 
         return true;
+    }
+
+    void COpenVRConnector::UpdateVisibility( const char *pszReason )
+    {
+        bool bVisible = IsVisible();
+        if ( m_bWasVisible != bVisible )
+        {
+            int nNewOverlayVisibleCount;
+            if ( bVisible )
+                nNewOverlayVisibleCount = ++m_pBackend->m_nOverlaysVisible;
+            else
+                nNewOverlayVisibleCount = --m_pBackend->m_nOverlaysVisible;
+
+            m_pBackend->m_nOverlaysVisible.notify_all();
+
+            m_bWasVisible = bVisible;
+            openvr_log.debugf( "[%s] ulKey: %lu nNewOverlayVisibleCount: %d -> m_bOverlayShown: %s m_bSceneAppVisible: %s",
+                pszReason,
+                GetVirtualConnectorKey(),
+                nNewOverlayVisibleCount,
+                m_bOverlayShown    ? "true" : "false",
+                m_bSceneAppVisible ? "true" : "false" );
+        }
     }
 
 	/////////////////////////
