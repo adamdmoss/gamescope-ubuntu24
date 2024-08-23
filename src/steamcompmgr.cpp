@@ -6046,6 +6046,8 @@ steamcompmgr_exit(void)
 		}
 	}
 
+	g_VirtualConnectorFocuses.clear();
+
     gamescope::IBackend::Set( nullptr );
 
     wlserver_lock();
