@@ -351,11 +351,18 @@ namespace gamescope
 	{
 	public:
 		COpenVRBackend()
+            : m_Thread{ [this](){ this->VRInputThread(); } }
 		{
 		}
 
 		virtual ~COpenVRBackend()
 		{
+            m_bRunning = false;
+
+            m_bInitted = true;
+            m_bInitted.notify_all();
+
+            m_Thread.join();
 		}
 
 		/////////////
@@ -501,8 +508,10 @@ namespace gamescope
             // Setup misc. stuff
             g_nOutputRefresh = (int32_t) ConvertHztomHz( roundf( vr::VRSystem()->GetFloatTrackedDeviceProperty( vr::k_unTrackedDeviceIndex_Hmd, vr::Prop_DisplayFrequency_Float ) ) );
 
-            std::thread input_thread_vrinput( [this](){ this->VRInputThread(); } );
-            input_thread_vrinput.detach();
+            m_bRunning = true;
+
+            m_bInitted = true;
+            m_bInitted.notify_all();
 
             return true;
 		}
@@ -839,9 +848,11 @@ namespace gamescope
         {
             pthread_setname_np( pthread_self(), "gamescope-vrinp" );
 
+            m_bInitted.wait( false );
+
             // Josh: PollNextOverlayEvent sucks.
             // I want WaitNextOverlayEvent (like SDL_WaitEvent) so this doesn't have to spin and sleep.
-            while (true)
+            while ( m_bRunning )
             {
                 {
                     std::scoped_lock lock{ m_mutActiveConnectors };
@@ -1122,6 +1133,10 @@ namespace gamescope
         std::vector<COpenVRConnector*> m_pActiveConnectors;
         std::mutex m_mutActiveConnectors;
         std::atomic<COpenVRConnector *> m_pFocusConnector;
+
+        std::thread m_Thread;
+        std::atomic<bool> m_bInitted = { false };
+        std::atomic<bool> m_bRunning = { false };
 	};
 
     ////////////////////
