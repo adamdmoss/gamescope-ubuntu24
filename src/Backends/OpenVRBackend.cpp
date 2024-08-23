@@ -993,11 +993,13 @@ namespace gamescope
                                         // or for other reasons.
                                         if ( !plane.IsSubview() )
                                         {
+                                            int nNewOverlayVisibleCount;
                                             if ( vrEvent.eventType == vr::VREvent_OverlayShown )
-                                                m_nOverlaysVisible++;
+                                                nNewOverlayVisibleCount = ++m_nOverlaysVisible;
                                             else
-                                                m_nOverlaysVisible--;
+                                                nNewOverlayVisibleCount = --m_nOverlaysVisible;
 
+                                            openvr_log.debugf( "nNewOverlayVisibleCount: %d", nNewOverlayVisibleCount );
                                             m_nOverlaysVisible.notify_all();
                                             assert( m_nOverlaysVisible >= 0 );
                                         }
