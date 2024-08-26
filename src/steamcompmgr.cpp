@@ -753,9 +753,13 @@ struct global_focus_t : public focus_t
 
 	gamescope::INestedHints *GetNestedHints()
 	{
-		if ( pVirtualConnector )
+		gamescope::IBackendConnector *pConnector = this->pVirtualConnector.get();
+		if ( !pConnector )
+			pConnector = GetBackend()->GetCurrentConnector();
+
+		if ( pConnector )
 		{
-			return pVirtualConnector->GetNestedHints();
+			return pConnector->GetNestedHints();
 		}
 
 		return nullptr;
@@ -8152,7 +8156,8 @@ steamcompmgr_main(int argc, char **argv)
 
 			bool bShouldPaint = false;
 
-			if ( GetBackend()->IsVisible() )
+			//if ( GetBackend()->IsVisible() )
+			if ( true )
 			{
 				switch ( eFlipType )
 				{
