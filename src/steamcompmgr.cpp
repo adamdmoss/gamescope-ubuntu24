@@ -3966,28 +3966,31 @@ determine_and_apply_focus( global_focus_t *pFocus )
 		focused_keyboard_display = get_win_display_name(pFocus->keyboardFocusWindow);
 	}
 
-	if ( steamMode )
+	if ( pFocus == GetCurrentFocus() )
 	{
-		XChangeProperty( root_ctx->dpy, root_ctx->root, root_ctx->atoms.gamescopeFocusedAppAtom, XA_CARDINAL, 32, PropModeReplace,
-						(unsigned char *)&focusedAppId, focusedAppId != 0 ? 1 : 0 );
+		if ( steamMode )
+		{
+			XChangeProperty( root_ctx->dpy, root_ctx->root, root_ctx->atoms.gamescopeFocusedAppAtom, XA_CARDINAL, 32, PropModeReplace,
+							(unsigned char *)&focusedAppId, focusedAppId != 0 ? 1 : 0 );
 
-		XChangeProperty( root_ctx->dpy, root_ctx->root, root_ctx->atoms.gamescopeFocusedAppGfxAtom, XA_CARDINAL, 32, PropModeReplace,
-						(unsigned char *)&focusedBaseAppId, focusedBaseAppId != 0 ? 1 : 0 );
+			XChangeProperty( root_ctx->dpy, root_ctx->root, root_ctx->atoms.gamescopeFocusedAppGfxAtom, XA_CARDINAL, 32, PropModeReplace,
+							(unsigned char *)&focusedBaseAppId, focusedBaseAppId != 0 ? 1 : 0 );
+		}
+
+		XChangeProperty( root_ctx->dpy, root_ctx->root, root_ctx->atoms.gamescopeFocusedWindowAtom, XA_CARDINAL, 32, PropModeReplace,
+						(unsigned char *)&focusedWindow, focusedWindow != 0 ? 1 : 0 );
+
+		XChangeProperty( root_ctx->dpy, root_ctx->root, root_ctx->atoms.gamescopeFocusDisplay, XA_CARDINAL, 32, PropModeReplace,
+						(unsigned char *)focused_display, strlen(focused_display) + 1 );
+
+		XChangeProperty( root_ctx->dpy, root_ctx->root, root_ctx->atoms.gamescopeMouseFocusDisplay, XA_CARDINAL, 32, PropModeReplace,
+						(unsigned char *)focused_mouse_display, strlen(focused_mouse_display) + 1 );
+
+		XChangeProperty( root_ctx->dpy, root_ctx->root, root_ctx->atoms.gamescopeKeyboardFocusDisplay, XA_CARDINAL, 32, PropModeReplace,
+						(unsigned char *)focused_keyboard_display, strlen(focused_keyboard_display) + 1 );
+
+		XFlush( root_ctx->dpy );
 	}
-
-	XChangeProperty( root_ctx->dpy, root_ctx->root, root_ctx->atoms.gamescopeFocusedWindowAtom, XA_CARDINAL, 32, PropModeReplace,
-					 (unsigned char *)&focusedWindow, focusedWindow != 0 ? 1 : 0 );
-
-	XChangeProperty( root_ctx->dpy, root_ctx->root, root_ctx->atoms.gamescopeFocusDisplay, XA_CARDINAL, 32, PropModeReplace,
-					 (unsigned char *)focused_display, strlen(focused_display) + 1 );
-
-	XChangeProperty( root_ctx->dpy, root_ctx->root, root_ctx->atoms.gamescopeMouseFocusDisplay, XA_CARDINAL, 32, PropModeReplace,
-					 (unsigned char *)focused_mouse_display, strlen(focused_mouse_display) + 1 );
-
-	XChangeProperty( root_ctx->dpy, root_ctx->root, root_ctx->atoms.gamescopeKeyboardFocusDisplay, XA_CARDINAL, 32, PropModeReplace,
-					 (unsigned char *)focused_keyboard_display, strlen(focused_keyboard_display) + 1 );
-
-	XFlush( root_ctx->dpy );
 
 	// Sort out fading.
 	if (pFocus->focusWindow && previousLocalFocus.focusWindow != pFocus->focusWindow)
