@@ -22,6 +22,8 @@ namespace gamescope
         udev *m_pUdev = nullptr;
         libinput *m_pLibInput = nullptr;
 
+        double m_flScrollAccum[2]{};
+
         static const libinput_interface s_LibInputInterface;
     };
 }

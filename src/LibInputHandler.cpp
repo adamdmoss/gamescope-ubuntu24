@@ -141,7 +141,35 @@ namespace gamescope
                 }
                 break;
 
-                // TODO: Scrolling.
+                case LIBINPUT_EVENT_POINTER_SCROLL_WHEEL:
+                {
+                    libinput_event_pointer *pPointerEvent = libinput_event_get_pointer_event( pEvent );
+
+                    static constexpr libinput_pointer_axis eAxes[] =
+                    {
+                        LIBINPUT_POINTER_AXIS_SCROLL_HORIZONTAL,
+                        LIBINPUT_POINTER_AXIS_SCROLL_VERTICAL,
+                    };
+
+                    for ( uint32_t i = 0; i < std::size( eAxes ); i++ )
+                    {
+                        libinput_pointer_axis eAxis = eAxes[i];
+
+                        if ( !libinput_event_pointer_has_axis( pPointerEvent, eAxis ) )
+                            continue;
+
+                        double flScroll = libinput_event_pointer_get_scroll_value_v120( pPointerEvent, eAxis );
+                        m_flScrollAccum[i] += flScroll / 120.0;
+                    }
+
+                    m_flScrollAccum[0] += eis_event_scroll_get_discrete_dx( pEisEvent ) / 120.0;
+                    m_flScrollAccum[1] += eis_event_scroll_get_discrete_dy( pEisEvent ) / 120.0;
+
+                    wlserver_lock();
+                    wlserver_mousebutton( uButton, eButtonState == LIBINPUT_BUTTON_STATE_PRESSED, ++s_uSequence );
+                    wlserver_unlock();
+                }
+                break;
 
                 case LIBINPUT_EVENT_KEYBOARD_KEY:
                 {
@@ -159,5 +187,20 @@ namespace gamescope
                     break;
             }
 		}
+
+        // Handle scrolling
+        {
+            double flScrollX = m_flScrollAccum[0];
+            double flScrollY = m_flScrollAccum[1];
+            m_flScrollAccum[0] = 0.0;
+            m_flScrollAccum[1] = 0.0;
+
+            if ( flScrollX != 0.0 || flScrollY != 0.0 )
+            {
+                wlserver_lock();
+                wlserver_mousewheel( flScrollX, flScrollY, ++s_uSequence );
+                wlserver_unlock();
+            }
+        }
     }
 }
