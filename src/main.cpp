@@ -107,6 +107,7 @@ const struct option *gamescope_options = (struct option[]){
 	{ "vr-overlay-physical-curvature", required_argument, nullptr, 0 },
 	{ "vr-overlay-physical-pre-curve-pitch", required_argument, nullptr, 0 },
 	{ "vr-scroll-speed", required_argument, nullptr, 0 },
+	{ "vr-session-manager", no_argument, nullptr, 0 },
 #endif
 
 	// wlserver options

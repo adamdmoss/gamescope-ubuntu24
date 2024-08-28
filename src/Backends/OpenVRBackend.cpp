@@ -19,6 +19,7 @@
 #include "refresh_rate.h"
 #include "edid.h"
 #include "Ratio.h"
+#include "LibInputHandler.h"
 
 #include <signal.h>
 #include <string.h>
@@ -352,6 +353,7 @@ namespace gamescope
 	public:
 		COpenVRBackend()
             : m_Thread{ [this](){ this->VRInputThread(); } }
+            , m_LibInputWaiter{ "gamescope-libinput" }
 		{
 		}
 
@@ -450,6 +452,19 @@ namespace gamescope
                             m_flPhysicalPreCurvePitch = atof( optarg );
                         } else if (strcmp(opt_name, "vr-scroll-speed") == 0) {
                             m_flScrollSpeed = atof( optarg );
+                        } else if (strcmp(opt_name, "vr-session-manager") == 0) {
+                            openvr_log.infof( "Becoming the VR session manager." );
+
+                            std::unique_ptr<CLibInputHandler> pLibInput = std::make_unique<CLibInputHandler>();
+                            if ( pLibInput->Init() )
+                            {
+                                m_pLibInput = std::move( pLibInput );
+                                m_LibInputWaiter.AddWaitable( m_pLibInput.get() );
+                            }
+                            else
+                            {
+                                openvr_log.errorf( "Could not start libinput for being the vr session manager" );
+                            }
                         }
                         break;
                     case '?':
@@ -1137,6 +1152,9 @@ namespace gamescope
         std::thread m_Thread;
         std::atomic<bool> m_bInitted = { false };
         std::atomic<bool> m_bRunning = { false };
+
+        std::shared_ptr<CLibInputHandler> m_pLibInput;
+        CAsyncWaiter<CRawPointer<IWaitable>, 16> m_LibInputWaiter;
 	};
 
     ////////////////////
