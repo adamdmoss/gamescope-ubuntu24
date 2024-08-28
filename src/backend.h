@@ -79,6 +79,10 @@ namespace gamescope
         }
     }
 
+    enum class InputType
+    {
+        Mouse,
+    };
 
     namespace TouchClickModes
     {
@@ -333,6 +337,8 @@ namespace gamescope
         virtual bool UsesVirtualConnectors() = 0;
         virtual std::shared_ptr<IBackendConnector> CreateVirtualConnector( uint64_t ulVirtualConnectorKey ) = 0;
 
+        virtual void NotifyPhysicalInput( InputType eInputType ) = 0;
+
         static IBackend *Get();
         template <typename T>
         static bool Set();
@@ -360,6 +366,8 @@ namespace gamescope
 
         virtual bool UsesVirtualConnectors() override;
         virtual std::shared_ptr<IBackendConnector> CreateVirtualConnector( uint64_t ulVirtualConnectorKey ) override;
+
+        virtual void NotifyPhysicalInput( InputType eInputType ) override {}
     };
 
     // This is a blob of data that may be associated with

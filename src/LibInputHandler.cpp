@@ -6,6 +6,7 @@
 #include <poll.h>
 
 #include "log.hpp"
+#include "backend.h"
 #include "wlserver.hpp"
 #include "Utils/Defer.h"
 
@@ -109,6 +110,8 @@ namespace gamescope
                     double flDx = libinput_event_pointer_get_dx( pPointerEvent );
                     double flDy = libinput_event_pointer_get_dy( pPointerEvent );
 
+                    GetBackend()->NotifyPhysicalInput( InputType::Mouse );
+
                     wlserver_lock();
                     wlserver_mousemotion( flDx, flDy, ++s_uSequence );
                     wlserver_unlock();
@@ -121,6 +124,8 @@ namespace gamescope
 
                     double flX = libinput_event_pointer_get_absolute_x( pPointerEvent );
                     double flY = libinput_event_pointer_get_absolute_y( pPointerEvent );
+
+                    GetBackend()->NotifyPhysicalInput( InputType::Mouse );
 
                     wlserver_lock();
                     wlserver_mousewarp( flX, flY, ++s_uSequence, true );
@@ -161,13 +166,6 @@ namespace gamescope
                         double flScroll = libinput_event_pointer_get_scroll_value_v120( pPointerEvent, eAxis );
                         m_flScrollAccum[i] += flScroll / 120.0;
                     }
-
-                    m_flScrollAccum[0] += eis_event_scroll_get_discrete_dx( pEisEvent ) / 120.0;
-                    m_flScrollAccum[1] += eis_event_scroll_get_discrete_dy( pEisEvent ) / 120.0;
-
-                    wlserver_lock();
-                    wlserver_mousebutton( uButton, eButtonState == LIBINPUT_BUTTON_STATE_PRESSED, ++s_uSequence );
-                    wlserver_unlock();
                 }
                 break;
 
