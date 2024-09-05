@@ -38,6 +38,7 @@ add_project_arguments(cppc.get_supported_arguments([
 ]), language: 'cpp')
 
 add_project_arguments(cppc.get_supported_arguments([
+  '-fno-exceptions',
   '-ffast-math',
 ]), language: 'cpp')
 
@@ -94,3 +95,6 @@ endif
 if get_option('enable_gamescope')
   subdir('src')
 endif
+
+# Handle default script/config stuff
+meson.add_install_script('default_scripts_install.sh')

@@ -7997,6 +7997,11 @@ steamcompmgr_main(int argc, char **argv)
 			hasRepaint = false;
 			hasRepaintNonBasePlane = false;
 			nIgnoredOverlayRepaints = 0;
+
+			{
+				gamescope::CScriptScopedLock script;
+				script.Manager().CallHook( "OnPostPaint" );
+			}
 		}
 
 		if ( bIsVBlankFromTimer )
