@@ -19,6 +19,7 @@
 #include "WaylandServer/WaylandResource.h"
 #include "WaylandServer/WaylandProtocol.h"
 #include "WaylandServer/LinuxDrmSyncobj.h"
+#include "WaylandServer/Reshade.h"
 
 #include "wlr_begin.hpp"
 #include <wlr/backend.h>
@@ -71,6 +72,7 @@
 #include "steamcompmgr.hpp"
 #include "log.hpp"
 #include "ime.hpp"
+#include "reshade_effect_manager.hpp"
 #include "xwayland_ctx.hpp"
 #include "refresh_rate.h"
 #include "InputEmulation.h"
@@ -1192,6 +1194,11 @@ static void create_explicit_sync()
 	new gamescope::WaylandServer::CLinuxDrmSyncobj( wlserver.display );
 }
 
+static void create_reshade()
+{
+	new gamescope::WaylandServer::CReshade( wlserver.display );
+}
+
 
 ////////////////////////
 // presentation-time
@@ -1750,6 +1757,8 @@ bool wlserver_init( void ) {
 	wl_signal_add( &wlserver.wlr.compositor->events.new_surface, &new_surface_listener );
 
 	create_ime_manager( &wlserver );
+
+	create_reshade();
 
 	create_gamescope_xwayland();
 
