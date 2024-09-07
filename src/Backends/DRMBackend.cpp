@@ -3174,10 +3174,10 @@ namespace gamescope
 			// thus: newLayout is ignored.
 			return VK_IMAGE_LAYOUT_GENERAL;
 		}
-        virtual void GetPreferredOutputFormat( VkFormat *pPrimaryPlaneFormat, VkFormat *pOverlayPlaneFormat ) const override
+        virtual void GetPreferredOutputFormat( uint32_t *pPrimaryPlaneFormat, uint32_t *pOverlayPlaneFormat ) const override
         {
-			*pPrimaryPlaneFormat = DRMFormatToVulkan( g_nDRMFormat, false );
-			*pOverlayPlaneFormat = DRMFormatToVulkan( g_nDRMFormatOverlay, false );
+			*pPrimaryPlaneFormat = g_nDRMFormat;
+			*pOverlayPlaneFormat = g_nDRMFormatOverlay;
         }
 		virtual bool ValidPhysicalDevice( VkPhysicalDevice pVkPhysicalDevice ) const override
 		{

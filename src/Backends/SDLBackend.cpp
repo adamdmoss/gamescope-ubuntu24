@@ -122,7 +122,7 @@ namespace gamescope
 		virtual std::span<const char *const> GetInstanceExtensions() const override;
 		virtual std::span<const char *const> GetDeviceExtensions( VkPhysicalDevice pVkPhysicalDevice ) const override;
 		virtual VkImageLayout GetPresentLayout() const override;
-		virtual void GetPreferredOutputFormat( VkFormat *pPrimaryPlaneFormat, VkFormat *pOverlayPlaneFormat ) const override;
+		virtual void GetPreferredOutputFormat( uint32_t *pPrimaryPlaneFormat, uint32_t *pOverlayPlaneFormat ) const override;
 		virtual bool ValidPhysicalDevice( VkPhysicalDevice pVkPhysicalDevice ) const override;
 
         virtual int Present( const FrameInfo_t *pFrameInfo, bool bAsync ) override;
@@ -351,10 +351,10 @@ namespace gamescope
 		return VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 	}
 
-	void CSDLBackend::GetPreferredOutputFormat( VkFormat *pPrimaryPlaneFormat, VkFormat *pOverlayPlaneFormat ) const
+	void CSDLBackend::GetPreferredOutputFormat( uint32_t *pPrimaryPlaneFormat, uint32_t *pOverlayPlaneFormat ) const
 	{
-		*pPrimaryPlaneFormat = VK_FORMAT_A2B10G10R10_UNORM_PACK32;
-		*pOverlayPlaneFormat = VK_FORMAT_B8G8R8A8_UNORM;
+		*pPrimaryPlaneFormat = VulkanFormatToDRM( VK_FORMAT_A2B10G10R10_UNORM_PACK32 );
+		*pOverlayPlaneFormat = VulkanFormatToDRM( VK_FORMAT_B8G8R8A8_UNORM );
 	}
 
 	bool CSDLBackend::ValidPhysicalDevice( VkPhysicalDevice pVkPhysicalDevice ) const

@@ -3113,12 +3113,13 @@ bool vulkan_make_swapchain( VulkanOutput_t *pOutput )
 	if ( surfaceFormat == formatCount )
 		return false;
 
-	pOutput->outputFormat = pOutput->surfaceFormats[ surfaceFormat ].format;
+	VkFormat eVkFormat = pOutput->surfaceFormats[ surfaceFormat ].format;
+	pOutput->uOutputFormat = VulkanFormatToDRM( pOutput->surfaceFormats[ surfaceFormat ].format );
 	
 	VkFormat formats[2] =
 	{
-		ToSrgbVulkanFormat( pOutput->outputFormat ),
-		ToLinearVulkanFormat( pOutput->outputFormat ),
+		ToSrgbVulkanFormat( eVkFormat ),
+		ToLinearVulkanFormat( eVkFormat ),
 	};
 
 	VkImageFormatListCreateInfo usageListInfo = {
@@ -3127,7 +3128,7 @@ bool vulkan_make_swapchain( VulkanOutput_t *pOutput )
 		.pViewFormats = formats,
 	};
 
-	vk_log.infof("Creating Gamescope nested swapchain with format %u and colorspace %u", pOutput->outputFormat, pOutput->surfaceFormats[surfaceFormat].colorSpace);
+	vk_log.infof("Creating Gamescope nested swapchain with format %u and colorspace %u", eVkFormat, pOutput->surfaceFormats[surfaceFormat].colorSpace);
 
 	VkSwapchainCreateInfoKHR createInfo = {
 		.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
@@ -3135,7 +3136,7 @@ bool vulkan_make_swapchain( VulkanOutput_t *pOutput )
 		.flags = formats[0] != formats[1] ? VK_SWAPCHAIN_CREATE_MUTABLE_FORMAT_BIT_KHR : (VkSwapchainCreateFlagBitsKHR )0,
 		.surface = pOutput->surface,
 		.minImageCount = imageCount,
-		.imageFormat = pOutput->outputFormat,
+		.imageFormat = eVkFormat,
 		.imageColorSpace = pOutput->surfaceFormats[surfaceFormat].colorSpace,
 		.imageExtent = {
 			.width = g_nOutputWidth,
@@ -3164,7 +3165,7 @@ bool vulkan_make_swapchain( VulkanOutput_t *pOutput )
 	{
 		pOutput->outputImages[i] = new CVulkanTexture();
 
-		if ( !pOutput->outputImages[i]->BInitFromSwapchain(swapchainImages[i], g_nOutputWidth, g_nOutputHeight, pOutput->outputFormat))
+		if ( !pOutput->outputImages[i]->BInitFromSwapchain(swapchainImages[i], g_nOutputWidth, g_nOutputHeight, eVkFormat))
 			return false;
 	}
 
@@ -3221,10 +3222,10 @@ static bool vulkan_make_output_images( VulkanOutput_t *pOutput )
 	pOutput->outputImagesPartialOverlay[1] = nullptr;
 	pOutput->outputImagesPartialOverlay[2] = nullptr;
 
-	VkFormat format = pOutput->outputFormat;
+	uint32_t uDRMFormat = pOutput->uOutputFormat;
 
 	pOutput->outputImages[0] = new CVulkanTexture();
-	bool bSuccess = pOutput->outputImages[0]->BInit( g_nOutputWidth, g_nOutputHeight, 1u, VulkanFormatToDRM(format, false), outputImageflags );
+	bool bSuccess = pOutput->outputImages[0]->BInit( g_nOutputWidth, g_nOutputHeight, 1u, uDRMFormat, outputImageflags );
 	if ( bSuccess != true )
 	{
 		vk_log.errorf( "failed to allocate buffer for KMS" );
@@ -3232,7 +3233,7 @@ static bool vulkan_make_output_images( VulkanOutput_t *pOutput )
 	}
 
 	pOutput->outputImages[1] = new CVulkanTexture();
-	bSuccess = pOutput->outputImages[1]->BInit( g_nOutputWidth, g_nOutputHeight, 1u, VulkanFormatToDRM(format, false), outputImageflags );
+	bSuccess = pOutput->outputImages[1]->BInit( g_nOutputWidth, g_nOutputHeight, 1u, uDRMFormat, outputImageflags );
 	if ( bSuccess != true )
 	{
 		vk_log.errorf( "failed to allocate buffer for KMS" );
@@ -3240,7 +3241,7 @@ static bool vulkan_make_output_images( VulkanOutput_t *pOutput )
 	}
 
 	pOutput->outputImages[2] = new CVulkanTexture();
-	bSuccess = pOutput->outputImages[2]->BInit( g_nOutputWidth, g_nOutputHeight, 1u, VulkanFormatToDRM(format, false), outputImageflags );
+	bSuccess = pOutput->outputImages[2]->BInit( g_nOutputWidth, g_nOutputHeight, 1u, uDRMFormat, outputImageflags );
 	if ( bSuccess != true )
 	{
 		vk_log.errorf( "failed to allocate buffer for KMS" );
@@ -3250,12 +3251,12 @@ static bool vulkan_make_output_images( VulkanOutput_t *pOutput )
 	// Oh no.
 	pOutput->temporaryHackyBlankImage = vulkan_create_debug_blank_texture();
 
-	if ( pOutput->outputFormatOverlay != VK_FORMAT_UNDEFINED && !kDisablePartialComposition )
+	if ( pOutput->uOutputFormatOverlay != VK_FORMAT_UNDEFINED && !kDisablePartialComposition )
 	{
-		VkFormat partialFormat = pOutput->outputFormatOverlay;
+		uint32_t uPartialDRMFormat = pOutput->uOutputFormatOverlay;
 
 		pOutput->outputImagesPartialOverlay[0] = new CVulkanTexture();
-		bool bSuccess = pOutput->outputImagesPartialOverlay[0]->BInit( g_nOutputWidth, g_nOutputHeight, 1u, VulkanFormatToDRM(partialFormat), outputImageflags, nullptr, 0, 0, pOutput->outputImages[0].get() );
+		bool bSuccess = pOutput->outputImagesPartialOverlay[0]->BInit( g_nOutputWidth, g_nOutputHeight, 1u, uPartialDRMFormat, outputImageflags, nullptr, 0, 0, pOutput->outputImages[0].get() );
 		if ( bSuccess != true )
 		{
 			vk_log.errorf( "failed to allocate buffer for KMS" );
@@ -3263,7 +3264,7 @@ static bool vulkan_make_output_images( VulkanOutput_t *pOutput )
 		}
 
 		pOutput->outputImagesPartialOverlay[1] = new CVulkanTexture();
-		bSuccess = pOutput->outputImagesPartialOverlay[1]->BInit( g_nOutputWidth, g_nOutputHeight, 1u, VulkanFormatToDRM(partialFormat), outputImageflags, nullptr, 0, 0, pOutput->outputImages[1].get() );
+		bSuccess = pOutput->outputImagesPartialOverlay[1]->BInit( g_nOutputWidth, g_nOutputHeight, 1u, uPartialDRMFormat, outputImageflags, nullptr, 0, 0, pOutput->outputImages[1].get() );
 		if ( bSuccess != true )
 		{
 			vk_log.errorf( "failed to allocate buffer for KMS" );
@@ -3271,7 +3272,7 @@ static bool vulkan_make_output_images( VulkanOutput_t *pOutput )
 		}
 
 		pOutput->outputImagesPartialOverlay[2] = new CVulkanTexture();
-		bSuccess = pOutput->outputImagesPartialOverlay[2]->BInit( g_nOutputWidth, g_nOutputHeight, 1u, VulkanFormatToDRM(partialFormat), outputImageflags, nullptr, 0, 0, pOutput->outputImages[2].get() );
+		bSuccess = pOutput->outputImagesPartialOverlay[2]->BInit( g_nOutputWidth, g_nOutputHeight, 1u, uPartialDRMFormat, outputImageflags, nullptr, 0, 0, pOutput->outputImages[2].get() );
 		if ( bSuccess != true )
 		{
 			vk_log.errorf( "failed to allocate buffer for KMS" );
@@ -3357,15 +3358,15 @@ bool vulkan_make_output()
 	}
 	else
 	{
-		GetBackend()->GetPreferredOutputFormat( &pOutput->outputFormat, &pOutput->outputFormatOverlay );
+		GetBackend()->GetPreferredOutputFormat( &pOutput->uOutputFormat, &pOutput->uOutputFormatOverlay );
 
-		if ( pOutput->outputFormat == VK_FORMAT_UNDEFINED )
+		if ( pOutput->uOutputFormat == DRM_FORMAT_INVALID )
 		{
 			vk_log.errorf( "failed to find Vulkan format suitable for KMS" );
 			return false;
 		}
 
-		if ( pOutput->outputFormatOverlay == VK_FORMAT_UNDEFINED )
+		if ( pOutput->uOutputFormatOverlay == DRM_FORMAT_INVALID )
 		{
 			vk_log.errorf( "failed to find Vulkan format suitable for KMS partial overlays" );
 			return false;
