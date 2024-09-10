@@ -2151,8 +2151,17 @@ static void paint_pipewire()
 	focus_t *pFocus = nullptr;
 	if ( ulFocusAppId )
 	{
+		static uint64_t s_ulLastFocusAppId = 0;
+
+		bool bAppIdChange = ulFocusAppId != s_ulLastFocusAppId;
+		if ( bAppIdChange )
+		{
+			xwm_log.infof( "Exposing appid %lu (%u 32-bit) focus-wise on pipewire stream.", ulFocusAppId, uint32_t( ulFocusAppId ) );
+			s_ulLastFocusAppId = ulFocusAppId;
+		}
+
 		static focus_t s_PipewireFocus{};
-		if ( s_PipewireFocus.IsDirty() )
+		if ( s_PipewireFocus.IsDirty() || bAppIdChange )
 		{
 			std::vector<steamcompmgr_win_t *> vecPossibleFocusWindows = GetGlobalPossibleFocusWindows();
 
