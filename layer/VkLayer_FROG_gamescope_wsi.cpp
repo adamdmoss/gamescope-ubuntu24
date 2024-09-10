@@ -3,6 +3,7 @@
 #define VK_USE_PLATFORM_XLIB_KHR
 #include "vkroots.h"
 #include "xcb_helpers.hpp"
+#include "vulkan_operators.hpp"
 #include "gamescope-swapchain-client-protocol.h"
 #include "../src/color_helpers.h"
 #include "../src/layer_defines.h"
@@ -209,7 +210,11 @@ namespace GamescopeWSILayer {
     GamescopeLayerClient::Flags flags;
     bool hdrOutput;
 
+    // Cached for comparison.
+    std::optional<VkRect2D> cachedWindowRect;
+
     bool isWayland() const {
+      // Is native Wayland?
       return connection == nullptr;
     }
 
@@ -222,7 +227,7 @@ namespace GamescopeWSILayer {
       return hdrOutput && hdrAllowed;
     }
 
-    bool canBypassXWayland() const {
+    bool canBypassXWayland() {
       if (isWayland())
         return true;
 
@@ -233,6 +238,8 @@ namespace GamescopeWSILayer {
         fprintf(stderr, "[Gamescope WSI] canBypassXWayland: failed to get window info for window 0x%x.\n", window);
         return false;
       }
+
+      cachedWindowRect = *rect;
 
       auto toplevelRect = xcb::getWindowRect(connection, *toplevelWindow);
       if (!toplevelRect) {
@@ -294,6 +301,7 @@ namespace GamescopeWSILayer {
     bool isBypassingXWayland;
     bool forceFifo;
     VkPresentModeKHR presentMode;
+    VkExtent2D extent;
     uint32_t serverId = 0;
     bool retired = false;
 
@@ -1046,6 +1054,7 @@ namespace GamescopeWSILayer {
           .isBypassingXWayland = canBypass,
           .forceFifo           = gamescopeIsForcingFifo(), // Were we forcing fifo when this swapchain was made?
           .presentMode         = pCreateInfo->presentMode, // The new present mode.
+          .extent              = pCreateInfo->imageExtent,
           .serverId            = serverId,
         });
         gamescopeSwapchain->pastPresentTimings.reserve(MaxPastPresentationTimes);
@@ -1238,6 +1247,19 @@ namespace GamescopeWSILayer {
           const bool canBypass = gamescopeSurface->canBypassXWayland();
           if (canBypass != gamescopeSwapchain->isBypassingXWayland)
             UpdateSwapchainResult(canBypass ? VK_SUBOPTIMAL_KHR : VK_ERROR_OUT_OF_DATE_KHR);
+
+          // Emulate behaviour when currentExtent changes in X11 swapchain.
+          if (!gamescopeSurface->isWayland()) {
+            // gamescopeSurface->cachedWindowSize is set by canBypassXWayland.
+            // TODO: Rename that to be some update cached vars thing, then read back canBypassXWayland.            
+            if (gamescopeSurface->cachedWindowRect) {
+              const bool windowSizeChanged = gamescopeSurface->cachedWindowRect->extent != gamescopeSwapchain->extent;
+              if (windowSizeChanged)
+                UpdateSwapchainResult(VK_ERROR_OUT_OF_DATE_KHR);
+            } else {
+              fprintf(stderr, "[Gamescope WSI] QueuePresentKHR: Failed to get cached window size for swapchain %u\n", i);
+            }
+          }
         }
       }
 
