@@ -91,6 +91,80 @@ namespace GamescopeWSILayer {
     return atoi(appid);
   }
 
+  // Taken from Mesa, licensed under MIT.
+  //
+  // No real reason to rewrite this code,
+  // it works :)
+  static char *
+  __getProgramName()
+  {
+    char * arg = strrchr(program_invocation_name, '/');
+    if (arg) {
+        char *program_name = NULL;
+        /* If the / character was found this is likely a linux path or
+        * an invocation path for a 64-bit wine program.
+        *
+        * However, some programs pass command line arguments into argv[0].
+        * Strip these arguments out by using the realpath only if it was
+        * a prefix of the invocation name.
+        */
+        char *path = realpath("/proc/self/exe", NULL);
+
+        if (path && strncmp(path, program_invocation_name, strlen(path)) == 0) {
+          /* This shouldn't be null because path is a a prefix,
+            * but check it anyway since path is static. */
+          char * name = strrchr(path, '/');
+          if (name)
+              program_name = strdup(name + 1);
+        }
+        if (path) {
+          free(path);
+        }
+        if (!program_name) {
+          program_name = strdup(arg+1);
+        }
+        return program_name;
+    }
+
+    /* If there was no '/' at all we likely have a windows like path from
+      * a wine application.
+      */
+    arg = strrchr(program_invocation_name, '\\');
+    if (arg)
+        return strdup(arg+1);
+
+    return strdup(program_invocation_name);
+  }
+
+  std::string_view getExecutableName() {
+    static std::string s_execName = []() -> std::string
+    {
+      const char *mesaExecutableEnv = getenv("MESA_DRICONF_EXECUTABLE_OVERRIDE");
+      if (mesaExecutableEnv && *mesaExecutableEnv) {
+        fprintf(stderr, "[Gamescope WSI] Executable name overriden by MESA_DRICONF_EXECUTABLE_OVERRIDE: %s\n", mesaExecutableEnv);
+        return mesaExecutableEnv;
+      }
+
+      const char *mesaProcessName = getenv("MESA_PROCESS_NAME");
+      if (mesaProcessName && *mesaProcessName) {
+        fprintf(stderr, "[Gamescope WSI] Executable name overriden by MESA_PROCESS_NAME: %s\n", mesaExecutableEnv);
+        return mesaProcessName;
+      }
+
+      std::string name;
+      {
+        char *programNameCStr = __getProgramName();
+        name = programNameCStr;
+        free(programNameCStr);
+      }
+
+      fprintf(stderr, "[Gamescope WSI] Executable name: %s\n", name.c_str());
+      return name;
+    }();
+
+    return s_execName;
+  }
+
   static GamescopeLayerClient::Flags defaultLayerClientFlags(const VkApplicationInfo *pApplicationInfo, uint32_t appid) {
     GamescopeLayerClient::Flags flags = 0;
 
@@ -113,6 +187,40 @@ namespace GamescopeWSILayer {
       if ((pApplicationInfo->pEngineName == "vkd3d"sv && pApplicationInfo->engineVersion >= VK_MAKE_VERSION(2, 12, 0)) ||
           (pApplicationInfo->pEngineName == "DXVK"sv  && pApplicationInfo->engineVersion >= VK_MAKE_VERSION(2, 3,  0))) {
         flags |= GamescopeLayerClient::Flag::FrameLimiterAware;
+      }
+    }
+
+    std::string_view executable = getExecutableName();
+
+    // Work around various Croteam games not handling
+    // suboptimal and swapchain extent correctly.
+    if (executable == "Talos"sv ||
+        executable == "Talos_Unrestricted"sv ||
+        executable == "Talos_VR"sv ||
+        executable == "Talos_Unrestricted_VR"sv ||
+        executable == "Sam2017"sv ||
+        executable == "Sam2017_Unrestricted"sv) {
+      flags |= GamescopeLayerClient::Flag::ForceSwapchainExtent;
+      flags |= GamescopeLayerClient::Flag::NoSuboptimal;
+    }
+
+    {
+      const char *forceSwapchainExtentEnvVar = getenv("vk_wsi_force_swapchain_to_current_extent");
+      if (forceSwapchainExtentEnvVar && *forceSwapchainExtentEnvVar) {
+        if (forceSwapchainExtentEnvVar == "true"sv)
+          flags |= GamescopeLayerClient::Flag::ForceSwapchainExtent;
+        else
+          flags &= ~GamescopeLayerClient::Flag::ForceSwapchainExtent;
+      }
+    }
+
+    {
+      const char *ignoreSuboptimalEnvVar = getenv("vk_x11_ignore_suboptimal");
+      if (ignoreSuboptimalEnvVar && *ignoreSuboptimalEnvVar) {
+        if (ignoreSuboptimalEnvVar == "true"sv)
+          flags |= GamescopeLayerClient::Flag::NoSuboptimal;
+        else
+          flags &= ~GamescopeLayerClient::Flag::NoSuboptimal;
       }
     }
 
@@ -414,6 +522,10 @@ namespace GamescopeWSILayer {
         if (state->flags & GamescopeLayerClient::Flag::DisableHDR)
           setenv("DXVK_HDR", "0", 1);
       }
+
+      // Work around the Mesa implementation of this being broken.
+      // ( https://gitlab.freedesktop.org/mesa/mesa/-/merge_requests/31134 )
+      setenv("vk_wsi_force_swapchain_to_current_extent", "false", 0);
 
       return result;
     }
@@ -961,6 +1073,16 @@ namespace GamescopeWSILayer {
 
       VkSwapchainCreateInfoKHR swapchainInfo = *pCreateInfo;
 
+      if (gamescopeSurface->flags & GamescopeLayerClient::Flag::ForceSwapchainExtent) {
+        if (!gamescopeSurface->isWayland()) {
+          auto rect = xcb::getWindowRect(gamescopeSurface->connection, gamescopeSurface->window);
+          if (!rect)
+            return VK_ERROR_SURFACE_LOST_KHR;
+
+          swapchainInfo.imageExtent = rect->extent;
+        }
+      }
+
       const bool canBypass = gamescopeSurface->canBypassXWayland();
       // If we can't flip, fallback to the regular XCB surface on the XCB window.
       if (!canBypass)
@@ -1245,11 +1367,17 @@ namespace GamescopeWSILayer {
           }
 
           const bool canBypass = gamescopeSurface->canBypassXWayland();
-          if (canBypass != gamescopeSwapchain->isBypassingXWayland)
-            UpdateSwapchainResult(canBypass ? VK_SUBOPTIMAL_KHR : VK_ERROR_OUT_OF_DATE_KHR);
+          if (canBypass != gamescopeSwapchain->isBypassingXWayland) {
+            if (canBypass) {
+              if (!(gamescopeSurface->flags & GamescopeLayerClient::Flag::NoSuboptimal))
+                UpdateSwapchainResult(VK_SUBOPTIMAL_KHR);
+            } else {
+              UpdateSwapchainResult(VK_ERROR_OUT_OF_DATE_KHR);  
+            }
+          }
 
           // Emulate behaviour when currentExtent changes in X11 swapchain.
-          if (!gamescopeSurface->isWayland()) {
+          if (!gamescopeSurface->isWayland() && !(gamescopeSurface->flags & GamescopeLayerClient::Flag::ForceSwapchainExtent)) {
             // gamescopeSurface->cachedWindowSize is set by canBypassXWayland.
             // TODO: Rename that to be some update cached vars thing, then read back canBypassXWayland.            
             if (gamescopeSurface->cachedWindowRect) {
