@@ -6360,9 +6360,22 @@ void update_wayland_res(CommitDoneList_t *doneCommits, steamcompmgr_win_t *w, Re
 		return;
 	}
 
-	// If we have an override surface, make sure this commit is for the current surface.
+	// If we ever use HDR on the surface, only ever accept flip commits from the WSI layer.
+	if ( reslistentry.feedback && reslistentry.feedback->vk_colorspace != VK_COLOR_SPACE_SRGB_NONLINEAR_KHR )
+	{
+		w->bHasHadNonSRGBColorSpace = true;
+	}
+
+	// If there are random commits that are really thin/small when we have the WSI layer active ever,
+	// let's just ignore these as they are probably bogus commits from glamor.
+	bool bPossiblyBogus = reslistentry.buf->width <= 2 || reslistentry.buf->height <= 2;
+
+	// If we have an override surface, make sure this commit is for the current surface
+	// or if the commit is probably bogus.
+	bool bOnlyCurrentSurface = w->bHasHadNonSRGBColorSpace || bPossiblyBogus;
+
 	bool for_current_surface = !w->override_surface() || w->current_surface() == reslistentry.surf;
-	if (!for_current_surface)
+	if ( bOnlyCurrentSurface && !for_current_surface )
 	{
 		wlserver_lock();
 		wlr_buffer_unlock( buf );
