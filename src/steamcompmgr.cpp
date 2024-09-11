@@ -6356,6 +6356,15 @@ void update_wayland_res(CommitDoneList_t *doneCommits, steamcompmgr_win_t *w, Re
 		wlserver_lock();
 		wlr_buffer_unlock( buf );
 		wlserver_unlock();
+
+		// Make sure to send the discarded event if we hit this
+		// to ensure forward progress.
+		if (!reslistentry.presentation_feedbacks.empty())
+		{
+			wlserver_presentation_feedback_discard( reslistentry.surf, reslistentry.presentation_feedbacks );
+			// presentation_feedbacks cleared by wlserver_presentation_feedback_discard
+		}
+
 		xwm_log.errorf( "waylandres but no win" );
 		return;
 	}
