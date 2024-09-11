@@ -6345,7 +6345,7 @@ static TempUpscaleImage_t *GetTempUpscaleImage( uint32_t uWidth, uint32_t uHeigh
 	return &image;
 }
 
-
+gamescope::ConVar<bool> cv_surface_update_force_only_current_surface( "surface_update_force_only_current_surface", false );
 
 void update_wayland_res(CommitDoneList_t *doneCommits, steamcompmgr_win_t *w, ResListEntry_t& reslistentry)
 {
@@ -6370,11 +6370,21 @@ void update_wayland_res(CommitDoneList_t *doneCommits, steamcompmgr_win_t *w, Re
 	// let's just ignore these as they are probably bogus commits from glamor.
 	bool bPossiblyBogus = reslistentry.buf->width <= 2 || reslistentry.buf->height <= 2;
 
+	// If the buffer has no damage, always prefer our override surface.
+	bool bHasDamage = ( reslistentry.surf->buffer_damage.extents.x2 - reslistentry.surf->buffer_damage.extents.x1 ) > 2 &&
+					  ( reslistentry.surf->buffer_damage.extents.y2 - reslistentry.surf->buffer_damage.extents.y1 ) > 2;
+
 	// If we have an override surface, make sure this commit is for the current surface
 	// or if the commit is probably bogus.
-	bool bOnlyCurrentSurface = w->bHasHadNonSRGBColorSpace || bPossiblyBogus;
+	bool bOnlyCurrentSurface = w->bHasHadNonSRGBColorSpace || bPossiblyBogus || !bHasDamage || cv_surface_update_force_only_current_surface;
 
 	bool for_current_surface = !w->override_surface() || w->current_surface() == reslistentry.surf;
+
+	if ( !for_current_surface )
+	{
+		xwm_log.debugf( "Got commit not for current surface." );
+	}
+
 	if ( bOnlyCurrentSurface && !for_current_surface )
 	{
 		wlserver_lock();
