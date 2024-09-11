@@ -908,7 +908,7 @@ namespace gamescope
                                     case vr::VREvent_OverlayClosed:
                                     case vr::VREvent_Quit:
                                     {
-                                        if ( bIsSteam )
+                                        if ( !steamMode || bIsSteam )
                                         {
                                             if ( !plane.IsSubview() )
                                             {
