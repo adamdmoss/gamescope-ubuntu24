@@ -507,6 +507,19 @@ namespace GamescopeWSILayer {
         fprintf(stderr, "[Gamescope WSI] Failed to connect to gamescope socket: %s. Bypass layer will be unavailable.\n", gamescopeWaylandSocket());
         return result;
       }
+
+      {
+        if (pCreateInfo->pApplicationInfo) {
+          fprintf(stderr, "[Gamescope WSI] Application info:\n");
+          fprintf(stderr, "  pApplicationName: %s\n", pCreateInfo->pApplicationInfo->pApplicationName);
+          fprintf(stderr, "  applicationVersion: %u\n", pCreateInfo->pApplicationInfo->applicationVersion);
+          fprintf(stderr, "  pEngineName: %s\n", pCreateInfo->pApplicationInfo->pEngineName);
+          fprintf(stderr, "  engineVersion: %u\n", pCreateInfo->pApplicationInfo->engineVersion);
+          fprintf(stderr, "  apiVersion: %u\n", pCreateInfo->pApplicationInfo->apiVersion);
+        } else {
+          fprintf(stderr, "[Gamescope WSI] No application info given.\n");
+        }
+      }
       
       {
         uint32_t appId = clientAppId();
