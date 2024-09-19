@@ -1972,7 +1972,7 @@ paint_window_commit( const gamescope::Rc<commit_t> &lastCommit, steamcompmgr_win
 			drawYOffset += w->GetGeometry().nY * currentScaleRatio_y;
 		}
 
-		if ( zoomScaleRatio != 1.0 )
+		if ( cursor && zoomScaleRatio != 1.0 )
 		{
 			drawXOffset += (((int)sourceWidth / 2) - cursor->x()) * currentScaleRatio_x;
 			drawYOffset += (((int)sourceHeight / 2) - cursor->y()) * currentScaleRatio_y;
@@ -2198,10 +2198,10 @@ static void paint_pipewire()
 	s_ulLastOverrideCommitId = ulOverrideCommitId;
 
 	// Paint the windows we have onto the Pipewire stream.
-	paint_window( pFocus->focusWindow, pFocus->focusWindow, &frameInfo, nullptr, 0, 1.0f, pFocus->overrideWindow );
+	paint_window( pFocus->focusWindow, pFocus->focusWindow, &frameInfo, global_focus.cursor, 0, 1.0f, pFocus->overrideWindow );
 
 	if ( pFocus->overrideWindow && !pFocus->focusWindow->isSteamStreamingClient )
-		paint_window( pFocus->overrideWindow, pFocus->focusWindow, &frameInfo, nullptr, PaintWindowFlag::NoFilter, 1.0f, pFocus->overrideWindow );
+		paint_window( pFocus->overrideWindow, pFocus->focusWindow, &frameInfo, global_focus.cursor, PaintWindowFlag::NoFilter, 1.0f, pFocus->overrideWindow );
 
 	gamescope::Rc<CVulkanTexture> pRGBTexture = s_pPipewireBuffer->texture->isYcbcr()
 		? vulkan_acquire_screenshot_texture( g_nOutputWidth, g_nOutputHeight, false, DRM_FORMAT_XRGB2101010 )
