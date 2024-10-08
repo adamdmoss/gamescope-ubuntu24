@@ -66,7 +66,7 @@ gamescope.config.known_displays.rogally_lcd = {
     -- ROG Ally + ROG Ally X.
     matches = function(display)
         if display.vendor == "TMX" and display.model == "TL070FVXS01-0" and display.product == 0x0002 then
-            debug("[rogally_lcd] Matched vendor: "..value.vendor.." model: "..value.model.." product:"..value.product)
+            debug("[rogally_lcd] Matched vendor: "..display.vendor.." model: "..display.model.." product:"..display.product)
             return 5000
         end
         return -1

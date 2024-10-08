@@ -39,7 +39,7 @@ gamescope.config.known_displays.steamdeck_deckhd_lcd = {
     end,
     matches = function(display)
         if display.vendor == "DHD" and display.model == "DeckHD-1200p" and display.product == 0x4001 then
-            debug("[steamdeck_deckhd_lcd] Matched vendor: "..value.vendor.." model: "..value.model.." product:"..value.product)
+            debug("[steamdeck_deckhd_lcd] Matched vendor: "..display.vendor.." model: "..display.model.." product:"..display.product)
             return 5000
         end
 
