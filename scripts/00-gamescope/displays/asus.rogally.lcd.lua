@@ -10,7 +10,7 @@ local rogally_lcd_refresh_rates = {
 }
 
 gamescope.config.known_displays.rogally_lcd = {
-    pretty_name = "ROG Ally/Ally X LCD",
+    pretty_name = "ASUS ROG Ally/Ally X LCD",
     hdr = {
         -- Setup some fallbacks for undocking with HDR, meant
         -- for the internal panel. It does not support HDR.
@@ -21,11 +21,14 @@ gamescope.config.known_displays.rogally_lcd = {
         max_frame_average_luminance = 500,
         min_content_light_level = 0.5
     },
-    -- Use the EDID colorimetry for now, but someone may
-    -- be able to tune this better for gamescope.
+    -- Use the EDID colorimetry for now, but someone should check
+    -- if the EDID colorimetry truly matches what the display is capable of.
     dynamic_refresh_rates = rogally_lcd_refresh_rates,
-    -- Follow the Steam Deck OLED style for modegen
-    -- and VFPs given framebuffer capabilities.
+    -- Follow the Steam Deck OLED style for modegen by variang the VFP (Vertical Front Porch)
+    --
+    -- Given that this display is VRR and likely has an FB/Partial FB in the DDIC:
+    -- it should be able to handle this method, and it is more optimal for latency
+    -- than elongating the clock.
     dynamic_modegen = function(base_mode, refresh)
         debug("Generating mode "..refresh.."Hz for ROG Ally with fixed pixel clock")
         local vfps = {
@@ -69,5 +72,5 @@ gamescope.config.known_displays.rogally_lcd = {
         return -1
     end
 }
-    debug("Registered ROG Ally/Ally X LCD as a known display")
-    --debug(inspect(gamescope.config.known_displays.rogally_lcd))
+debug("Registered ASUS ROG Ally/Ally X LCD as a known display")
+--debug(inspect(gamescope.config.known_displays.rogally_lcd))
