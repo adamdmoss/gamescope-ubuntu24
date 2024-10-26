@@ -55,6 +55,8 @@ using namespace std::literals;
 
 static LogScope xdg_log( "xdg_backend" );
 
+static const char *GAMESCOPE_plane_tag = "gamescope-plane";
+
 template <typename Func, typename... Args>
 auto CallWithAllButLast(Func pFunc, Args&&... args)
 {
@@ -904,6 +906,7 @@ namespace gamescope
     {
         m_pParent = pParent;
         m_pSurface = wl_compositor_create_surface( m_pBackend->GetCompositor() );
+        wl_proxy_set_tag( (wl_proxy *)m_pSurface, &GAMESCOPE_plane_tag );
         wl_surface_set_user_data( m_pSurface, this );
         wl_surface_add_listener( m_pSurface, &s_SurfaceListener, this );
 
@@ -2586,6 +2589,9 @@ namespace gamescope
 
     void CWaylandInputThread::Wayland_Pointer_Enter( wl_pointer *pPointer, uint32_t uSerial, wl_surface *pSurface, wl_fixed_t fSurfaceX, wl_fixed_t fSurfaceY )
     {
+        if ( !( wl_proxy_get_tag( (wl_proxy *)pSurface ) == &GAMESCOPE_plane_tag ) )
+            return;
+
         CWaylandPlane *pPlane = (CWaylandPlane *)wl_surface_get_user_data( pSurface );
         if ( !pPlane )
             return;
@@ -2597,6 +2603,9 @@ namespace gamescope
     }
     void CWaylandInputThread::Wayland_Pointer_Leave( wl_pointer *pPointer, uint32_t uSerial, wl_surface *pSurface )
     {
+        if ( !( wl_proxy_get_tag( (wl_proxy *)pSurface ) == &GAMESCOPE_plane_tag ) )
+            return;
+
         CWaylandPlane *pPlane = (CWaylandPlane *)wl_surface_get_user_data( pSurface );
         if ( !pPlane )
             return;
