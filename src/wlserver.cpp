@@ -26,7 +26,19 @@
 #include <wlr/interfaces/wlr_keyboard.h>
 #include <wlr/render/wlr_renderer.h>
 #include <wlr/render/timeline.h>
-#include <wlr/render/drm_syncobj.h>
+
+
+// @begin ADAM HACKS
+#define wlr_drm_syncobj_timeline_unref(P) wlr_render_timeline_unref(P)
+#define wlr_drm_syncobj_timeline_ref(P) wlr_render_timeline_ref(P)
+
+//typedef wlr_render_timeline wlr_drm_syncobj_timeline;
+
+#define wlr_drm_syncobj_timeline wlr_render_timeline
+
+//#include <wlr/render/drm_syncobj.h>
+// @end ADAM HACKS
+
 #include <wlr/types/wlr_compositor.h>
 #include <wlr/types/wlr_keyboard.h>
 #include <wlr/types/wlr_pointer.h>
@@ -184,7 +196,7 @@ std::optional<ResListEntry_t> PrepareCommit( struct wlr_surface *surf, struct wl
 	const auto& pFeedback = wlserver_surface_swapchain_feedback(surf);
 
 	wlr_linux_drm_syncobj_surface_v1_state *pSyncState =
-		wlr_linux_drm_syncobj_v1_get_surface_state( surf );
+		wlr_linux_drm_syncobj_v1_get_surface_state( wlserver.wlr.drm_syncobj_manager_v1,surf );
 
 	auto oAcquirePoint = !pSyncState ? std::nullopt : std::optional<GamescopeTimelinePoint> {
 			std::in_place_t{},
