@@ -1,3 +1,11 @@
+## gamescope-ubuntu24: a recent gamescope version, but it builds on ubuntu24
+
+It's just like upstream gamescope (>3.15.9 at the time of writing) but without the bits that break building on Ubuntu 24.04.1 (looking at you, deps of wlroots 0.18).  I wanted something more recent than 3.13.19 or that 3.12.5-2 deb that's floating around.
+
+Not intended for upstreaming, thus it gets a widdle repo over here.  It may be derpy but WFM.
+
+Original README follows below.
+
 ## gamescope: the micro-compositor formerly known as steamcompmgr
 
 In an embedded session usecase, gamescope does the same thing as steamcompmgr, but with less extra copies and latency:
