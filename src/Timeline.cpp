@@ -6,7 +6,7 @@
 #include "rendervulkan.hpp"
 
 #include "wlr_begin.hpp"
-#include <wlr/render/drm_syncobj.h>
+//#include <wlr/render/drm_syncobj.h>
 #include <wlr/types/wlr_linux_drm_syncobj_v1.h>
 #include "wlr_end.hpp"
 
