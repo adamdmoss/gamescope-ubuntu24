@@ -56,7 +56,7 @@ namespace gamescope
     CBaseBackendFb::~CBaseBackendFb()
     {
         // I do not own the client buffer, but I released that in DecRef.
-        assert( !HasLiveReferences() );
+        //assert( !HasLiveReferences() );
     }
 
     uint32_t CBaseBackendFb::IncRef()
