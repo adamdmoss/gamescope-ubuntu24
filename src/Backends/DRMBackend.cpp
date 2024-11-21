@@ -583,7 +583,7 @@ static constexpr uint32_t s_kSteamDeckOLEDRates[] =
 	90, 
 };
 
-static void update_connector_display_info_wl(struct drm_t *drm)
+void update_connector_display_info_wl(struct drm_t *drm)
 {
 	wlserver_lock();
 	for ( const auto &control : wlserver.gamescope_controls )

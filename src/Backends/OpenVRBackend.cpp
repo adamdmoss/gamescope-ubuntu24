@@ -50,6 +50,7 @@ extern gamescope::ConVar<bool> cv_hdr_enabled;
 extern uint64_t g_SteamCompMgrLimitedAppRefreshCycle;
 
 void MakeFocusDirty();
+void update_connector_display_info_wl(struct drm_t *drm);
 
 static LogScope openvr_log("openvr");
 
@@ -917,7 +918,10 @@ namespace gamescope
         {
             COpenVRConnector *pPreviousFocus = m_pFocusConnector.exchange( pFocus );
             if ( pPreviousFocus != pFocus )
+            {
                 MakeFocusDirty();
+                update_connector_display_info_wl( NULL );
+            }
         }
 
         void VRInputThread()
