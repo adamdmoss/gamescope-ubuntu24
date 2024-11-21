@@ -230,6 +230,8 @@ namespace gamescope
 
         COpenVRBackend *GetBackend() const { return m_pBackend; }
 
+        void OnPageFlip();
+
     private:
         COpenVRConnector *m_pConnector = nullptr;
         COpenVRBackend *m_pBackend = nullptr;
@@ -240,6 +242,9 @@ namespace gamescope
         uint32_t m_uSortOrder = 0;
         vr::VROverlayHandle_t m_hOverlay = vr::k_ulOverlayHandleInvalid;
         vr::VROverlayHandle_t m_hOverlayThumbnail = vr::k_ulOverlayHandleInvalid;
+
+        Rc<COpenVRFb> m_pQueuedFbId;
+        Rc<COpenVRFb> m_pVisibleFbId;
     };
 
     class COpenVRConnector final : public CBaseBackendConnector, public INestedHints
@@ -274,8 +279,6 @@ namespace gamescope
         virtual const char *GetName() const override;
         virtual const char *GetMake() const override;
         virtual const char *GetModel() const override;
-
-        virtual VBlankScheduleTime FrameSync() override;
 
 		virtual int Present( const FrameInfo_t *pFrameInfo, bool bAsync ) override;
 
@@ -350,7 +353,6 @@ namespace gamescope
         bool m_bWasVisible = false; // Event thread only
         std::atomic<bool> m_bOverlayShown = { false };
         std::atomic<bool> m_bSceneAppVisible = { false };
-
     };
 
 	class COpenVRBackend final : public CBaseBackend
@@ -358,6 +360,7 @@ namespace gamescope
 	public:
 		COpenVRBackend()
             : m_Thread{ [this](){ this->VRInputThread(); } }
+            , m_FlipHandlerThread{ [this](){ this->FlipHandlerThread(); } }
             , m_LibInputWaiter{ "gamescope-libinput" }
 		{
 		}
@@ -370,7 +373,43 @@ namespace gamescope
             m_bInitted.notify_all();
 
             m_Thread.join();
+            m_FlipHandlerThread.join();
 		}
+
+        void FlipHandlerThread()
+        {
+            pthread_setname_np( pthread_self(), "gamescope-vrflip" );
+
+            m_bInitted.wait( false );
+
+            while ( m_bRunning )
+            {
+                if ( vr::VROverlay()->WaitFrameSync( ~0u ) != vr::VROverlayError_None )
+                    openvr_log.errorf( "WaitFrameSync failed!" );
+
+                static constexpr uint64_t k_ulSchedulingFudge = 100'000; // 0.1ms
+                uint64_t ulNow = get_time_in_nanos() - k_ulSchedulingFudge;
+
+                GetVBlankTimer().MarkVBlank( ulNow, true );
+
+                // Nudge so that steamcompmgr releases commits.
+                nudge_steamcompmgr();
+
+                // Flush out any pending commits -> visible
+                // and any visible commits -> release.
+                {
+                    std::scoped_lock lock{ m_mutActiveConnectors };
+
+                    for ( COpenVRConnector *pConnector : m_pActiveConnectors )
+                    {
+                        for ( COpenVRPlane &plane : pConnector->GetPlanes() )
+                        {
+                            plane.OnPageFlip();
+                        }
+                    }
+                }
+            }
+        }
 
 		/////////////
 		// IBackend
@@ -762,7 +801,7 @@ namespace gamescope
 
         virtual bool NeedsFrameSync() const override
         {
-            return true;
+            return false;
         }
 
         virtual TouchClickMode GetTouchClickMode() override
@@ -1214,6 +1253,7 @@ namespace gamescope
         std::atomic<COpenVRConnector *> m_pFocusConnector;
 
         std::thread m_Thread;
+        std::thread m_FlipHandlerThread;
         std::atomic<bool> m_bInitted = { false };
         std::atomic<bool> m_bRunning = { false };
 
@@ -1230,7 +1270,6 @@ namespace gamescope
         , m_pBackend{ pBackend }
         , m_Planes{ this, this, this, this, this, this, this, this }
     {
-
     }
 
     COpenVRConnector::~COpenVRConnector()
@@ -1318,21 +1357,6 @@ namespace gamescope
     const char *COpenVRConnector::GetModel() const
     {
         return "Virtual Display";
-    }
-
-    VBlankScheduleTime COpenVRConnector::FrameSync()
-    {
-        m_pBackend->WaitUntilVisible();
-
-        if ( vr::VROverlay()->WaitFrameSync( ~0u ) != vr::VROverlayError_None )
-            openvr_log.errorf( "WaitFrameSync failed!" );
-
-        uint64_t ulNow = get_time_in_nanos();
-        return VBlankScheduleTime
-        {
-            .ulTargetVBlank  = ulNow + 3'000'000, // Not right. just a stop-gap for now.
-            .ulScheduledWakeupPoint = ulNow,
-        };
     }
 
     int COpenVRConnector::Present( const FrameInfo_t *pFrameInfo, bool bAsync )
@@ -1672,6 +1696,8 @@ namespace gamescope
             vr::VROverlay()->SetOverlayFlag( m_hOverlay, vr::VROverlayFlags_EnableControlBarSteamUI, steamMode );
         }
 
+        COpenVRFb *pFb = nullptr;
+
         if ( oState )
         {
             vr::VROverlay()->SetOverlayAlpha( m_hOverlay, oState->flAlpha );
@@ -1700,7 +1726,7 @@ namespace gamescope
                     vr::VROverlay()->ShowOverlay( m_hOverlay );
                 }
 
-                COpenVRFb *pFb = static_cast<COpenVRFb *>( oState->pTexture->GetBackendFb() );
+                pFb = static_cast<COpenVRFb *>( oState->pTexture->GetBackendFb() );
                 vr::SharedTextureHandle_t ulHandle = pFb->GetSharedTextureHandle();
 
                 vr::Texture_t texture = { (void *)&ulHandle, vr::TextureType_SharedTextureHandle, vr::ColorSpace_Gamma };
@@ -1752,6 +1778,8 @@ namespace gamescope
                 vr::VROverlay()->HideOverlay( m_hOverlay );
             }
         }
+
+        m_pQueuedFbId = pFb;
     }
 
     void COpenVRPlane::Present( const FrameInfo_t::Layer_t *pLayer )
@@ -1779,6 +1807,12 @@ namespace gamescope
         {
             Present( std::nullopt );
         }
+    }
+
+    void COpenVRPlane::OnPageFlip()
+    {
+        m_pVisibleFbId = m_pQueuedFbId;
+        m_pQueuedFbId = nullptr;
     }
 
 	/////////////////////////
