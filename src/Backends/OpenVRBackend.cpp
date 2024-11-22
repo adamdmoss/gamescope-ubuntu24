@@ -244,6 +244,7 @@ namespace gamescope
         vr::VROverlayHandle_t m_hOverlay = vr::k_ulOverlayHandleInvalid;
         vr::VROverlayHandle_t m_hOverlayThumbnail = vr::k_ulOverlayHandleInvalid;
 
+        std::mutex m_mutFbIds;
         Rc<COpenVRFb> m_pQueuedFbId;
         Rc<COpenVRFb> m_pVisibleFbId;
     };
@@ -1782,7 +1783,10 @@ namespace gamescope
             }
         }
 
-        m_pQueuedFbId = pFb;
+        {
+            std::scoped_lock lock{ m_mutFbIds };
+            m_pQueuedFbId = pFb;
+        }
     }
 
     void COpenVRPlane::Present( const FrameInfo_t::Layer_t *pLayer )
@@ -1814,8 +1818,14 @@ namespace gamescope
 
     void COpenVRPlane::OnPageFlip()
     {
-        m_pVisibleFbId = m_pQueuedFbId;
-        m_pQueuedFbId = nullptr;
+        {
+            std::scoped_lock lock{ m_mutFbIds };
+
+            // XXX: We have no guarantee for WHAT the sequence is here. This could be total crap.
+            // but this is probably good enough for now?
+            m_pVisibleFbId = std::move( m_pQueuedFbId );
+            m_pQueuedFbId = nullptr;
+        }
     }
 
 	/////////////////////////
