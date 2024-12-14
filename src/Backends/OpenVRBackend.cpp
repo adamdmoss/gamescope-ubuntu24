@@ -948,8 +948,13 @@ namespace gamescope
                             {
                                 switch( vrEvent.eventType )
                                 {
-                                    case vr::VREvent_OverlayClosed:
                                     case vr::VREvent_Quit:
+                                    {
+                                        raise( SIGTERM );
+                                    }
+                                    break;
+
+                                    case vr::VREvent_OverlayClosed:
                                     {
                                         if ( !steamMode || bIsSteam )
                                         {
