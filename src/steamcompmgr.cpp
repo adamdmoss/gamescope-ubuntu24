@@ -5895,7 +5895,7 @@ error(Display *dpy, XErrorEvent *ev)
 	return 0;
 }
 
-[[noreturn]] static void
+static void
 steamcompmgr_exit(void)
 {
 	g_ImageWaiter.Shutdown();
@@ -5912,6 +5912,11 @@ steamcompmgr_exit(void)
 	g_steamcompmgr_xdg_wins.clear();
 	g_HeldCommits[ HELD_COMMIT_BASE ] = nullptr;
 	g_HeldCommits[ HELD_COMMIT_FADE ] = nullptr;
+
+	for ( auto &lut : g_ColorMgmtLuts ) lut.shutdown();
+	for ( auto &lut : g_ColorMgmtLutsOverride ) lut.shutdown();
+	for ( auto &lut : g_ScreenshotColorMgmtLuts ) lut.shutdown();
+	for ( auto &lut : g_ScreenshotColorMgmtLutsHDR ) lut.shutdown();
 
 	if ( statsThreadRun == true )
 	{
@@ -5936,15 +5941,16 @@ steamcompmgr_exit(void)
     wlserver_lock();
     wlserver_shutdown();
     wlserver_unlock(false);
-
-	pthread_exit(NULL);
 }
 
-static int
+[[noreturn]] static int
 handle_io_error(Display *dpy)
 {
 	xwm_log.errorf("X11 I/O error");
 	steamcompmgr_exit();
+
+	g_SteamCompMgrXWaylandServerMutex.unlock();
+	pthread_exit(NULL);
 }
 
 static bool
