@@ -641,7 +641,7 @@ DataUniform::~DataUniform()
 {
 }
 
-static std::vector<std::shared_ptr<ReshadeUniform>> createReshadeUniforms(const reshadefx::module& module)
+static std::vector<std::shared_ptr<ReshadeUniform>> createReshadeUniforms(const reshadefx::module& module, uint32_t *pFlags)
 {
     std::vector<std::shared_ptr<ReshadeUniform>> uniforms;
     for (auto& uniform : module.uniforms)
@@ -702,6 +702,10 @@ static std::vector<std::shared_ptr<ReshadeUniform>> createReshadeUniforms(const 
             else if (source == "bufready_depth")
             {
                 uniforms.push_back(std::make_shared<DepthUniform>(uniform));
+            }
+            else if (source == "gamescope_always_paint")
+            {
+                ( *pFlags ) |= ReshadeEffectFlag::AlwaysScanout;
             }
             else if (!source.empty())
             {
@@ -1089,7 +1093,7 @@ bool ReshadeEffectPipeline::init(CVulkanDevice *device, const ReshadeEffectKey &
     }
 
     // Create Uniforms
-    m_uniforms = createReshadeUniforms(*m_module);
+    m_uniforms = createReshadeUniforms(*m_module, &m_flags);
 
     // Create Textures
     {
