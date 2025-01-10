@@ -759,8 +759,9 @@ namespace gamescope
 
         virtual bool SupportsExplicitSync() const override
         {
-            // This branch, need to rebase stuff for it to actually be good.
-            return false;
+            // We only forward done DMA-BUFs, so this should be fine.
+            // SteamVR does not do any wait/poll/sync on these.
+            return true;
         }
 
 		virtual bool IsVisible() const override
