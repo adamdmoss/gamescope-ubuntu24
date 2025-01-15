@@ -7770,6 +7770,7 @@ steamcompmgr_main(int argc, char **argv)
 			s_eLastVirtualConnectorStrategy = eVirtualConnectorStrategy;
 		}
 
+#if 0
 		bool bDirtyFocuses = false;
 		for ( auto &iter : g_VirtualConnectorFocuses )
 		{
@@ -7780,6 +7781,7 @@ steamcompmgr_main(int argc, char **argv)
 				break;
 			}
 		}
+#endif
 
 		// XXX: Need to look into why this doesn't work.
 		//	if ( bDirtyFocuses )
