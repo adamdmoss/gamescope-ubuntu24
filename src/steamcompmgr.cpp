@@ -7629,6 +7629,8 @@ steamcompmgr_main(int argc, char **argv)
 
 		if (global_focus.IsDirty())
 			determine_and_apply_focus();
+#if 0
+#endif
 
 		// If our DRM state is out-of-date, refresh it. This might update
 		// the output size.
