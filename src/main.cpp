@@ -102,6 +102,7 @@ const struct option *gamescope_options = (struct option[]){
 	{ "vr-overlay-enable-control-bar", no_argument, nullptr, 0 },
 	{ "vr-overlay-enable-control-bar-keyboard", no_argument, nullptr, 0 },
 	{ "vr-overlay-enable-control-bar-close", no_argument, nullptr, 0 },
+	{ "vr-overlay-enable-click-stabilization", no_argument, nullptr, 0 },
 	{ "vr-overlay-modal", no_argument, nullptr, 0 },
 	{ "vr-overlay-physical-width", required_argument, nullptr, 0 },
 	{ "vr-overlay-physical-curvature", required_argument, nullptr, 0 },
@@ -234,6 +235,7 @@ const char usage[] =
 	"  --vr-overlay-enable-control-bar          Enables the SteamVR control bar\n"
 	"  --vr-overlay-enable-control-bar-keyboard Enables the SteamVR keyboard button on the control bar\n"
 	"  --vr-overlay-enable-control-bar-close    Enables the SteamVR close button on the control bar\n"
+	"  --vr-overlay-enable-click-stabilization  Enables the SteamVR click stabilization\n"
 	"  --vr-overlay-modal                       Makes our VR overlay appear as a modal\n"
 	"  --vr-overlay-physical-width              Sets the physical width of our VR overlay in metres\n"
 	"  --vr-overlay-physical-curvature          Sets the curvature of our VR overlay\n"

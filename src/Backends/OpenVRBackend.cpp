@@ -484,6 +484,8 @@ namespace gamescope
                             m_bEnableControlBarKeyboard = true;
                         } else if (strcmp(opt_name, "vr-overlay-enable-control-bar-close") == 0) {
                             m_bEnableControlBarClose = true;
+                        } else if (strcmp(opt_name, "vr-overlay-enable-click-stabilization") == 0) {
+                            m_bEnableClickStabilization = true;
                         } else if (strcmp(opt_name, "vr-overlay-modal") == 0) {
                             m_bModal = true;
                         } else if (strcmp(opt_name, "vr-overlay-physical-width") == 0) {
@@ -886,6 +888,7 @@ namespace gamescope
         bool ShouldEnableControlBar() const { return m_bEnableControlBar; }
         bool ShouldEnableControlBarKeyboard() const { return m_bEnableControlBarKeyboard; }
         bool ShouldEnableControlBarClose() const { return m_bEnableControlBarClose; }
+        bool ShouldEnableClickStabilization() const { return m_bEnableClickStabilization; }
         bool IsModal() const { return m_bModal; }
         float GetPhysicalWidth() const { return m_flPhysicalWidth; }
         float GetPhysicalCurvature() const { return m_flPhysicalCurvature; }
@@ -1226,6 +1229,7 @@ namespace gamescope
         bool m_bEnableControlBar = false;
         bool m_bEnableControlBarKeyboard = false;
         bool m_bEnableControlBarClose = false;
+        bool m_bEnableClickStabilization = false;
         bool m_bModal = false;
         float m_flPhysicalWidth = 2.0f;
         float m_flPhysicalCurvature = 0.0f;
@@ -1690,6 +1694,7 @@ namespace gamescope
             vr::VROverlay()->CreateSubviewOverlay( pParent->GetOverlay(), szSubviewName.c_str(), "Gamescope Layer", &m_hOverlay );
         }
 
+        vr::VROverlay()->SetOverlayFlag( m_hOverlay, vr::VROverlayFlags_EnableClickStabilization, m_pBackend->ShouldEnableClickStabilization() );
         vr::VROverlay()->SetOverlayFlag( m_hOverlay, vr::VROverlayFlags_IsPremultiplied, true );
         vr::VROverlay()->SetOverlayInputMethod( m_hOverlay, vr::VROverlayInputMethod_Mouse );
         vr::VROverlay()->SetOverlaySortOrder( m_hOverlay, m_uSortOrder );
