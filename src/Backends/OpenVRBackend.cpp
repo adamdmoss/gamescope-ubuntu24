@@ -75,8 +75,6 @@ gamescope::ConVar<uint64_t> cv_vr_poll_rate( "vr_poll_rate", 4'000'000ul, "Time 
 // Not in public headers yet.
 namespace vr
 {
-    const VROverlayFlags VROverlayFlags_EnableControlBarSteamUI = (VROverlayFlags)(1 << 26);
-
     const EVRButtonId k_EButton_Steam = (EVRButtonId)(50);
     const EVRButtonId k_EButton_QAM = (EVRButtonId)(51);
 }
@@ -1701,11 +1699,6 @@ namespace gamescope
 
     void COpenVRPlane::Present( std::optional<OpenVRPlaneState> oState )
     {
-        if ( !m_bIsSubview )
-        {
-            vr::VROverlay()->SetOverlayFlag( m_hOverlay, vr::VROverlayFlags_EnableControlBarSteamUI, steamMode );
-        }
-
         COpenVRFb *pFb = nullptr;
 
         if ( oState )
