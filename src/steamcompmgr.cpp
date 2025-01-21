@@ -1623,6 +1623,16 @@ int MouseCursor::y() const
 
 bool MouseCursor::getTexture()
 {
+	uint64_t ulConnectorId = 0;
+	if ( GetBackend()->GetCurrentConnector() )
+		ulConnectorId = GetBackend()->GetCurrentConnector()->GetConnectorID();
+
+	if ( ulConnectorId != m_ulLastConnectorId )
+	{
+		m_ulLastConnectorId = ulConnectorId;
+		m_dirty = true;
+	}
+
 	if (!m_dirty) {
 		return !m_imageEmpty;
 	}
@@ -1725,10 +1735,8 @@ bool MouseCursor::getTexture()
 	updateCursorFeedback();
 
 	if (m_imageEmpty) {
-#if 0 // XXX(strategy) FIXME
-		if ( GetBackend()->GetNestedHints() )
-			GetBackend()->GetNestedHints()->SetCursorImage( nullptr );
-#endif
+		if ( GetBackend()->GetCurrentConnector() && GetBackend()->GetCurrentConnector()->GetNestedHints() )
+			GetBackend()->GetCurrentConnector()->GetNestedHints()->SetCursorImage( nullptr );
 		return false;
 	}
 
@@ -1742,8 +1750,7 @@ bool MouseCursor::getTexture()
 
 	m_texture = vulkan_create_texture_from_bits(surfaceWidth, surfaceHeight, nContentWidth, nContentHeight, DRM_FORMAT_ARGB8888, texCreateFlags, cursorBuffer.data());
 
-#if 0 // XXX(strategy) FIXME
-	if ( GetBackend()->GetNestedHints() )
+	if ( GetBackend()->GetCurrentConnector() && GetBackend()->GetCurrentConnector()->GetNestedHints() )
 	{
 		auto info = std::make_shared<gamescope::INestedHints::CursorInfo>(
 			gamescope::INestedHints::CursorInfo
@@ -1754,9 +1761,8 @@ bool MouseCursor::getTexture()
 				.uXHotspot = image->xhot,
 				.uYHotspot = image->yhot,
 			});
-		GetBackend()->GetNestedHints()->SetCursorImage( std::move( info ) );
+		GetBackend()->GetCurrentConnector()->GetNestedHints()->SetCursorImage( std::move( info ) );
 	}
-#endif
 
 	assert(m_texture);
 	XFree(image);

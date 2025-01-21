@@ -109,6 +109,7 @@ private:
 
 	gamescope::OwningRc<CVulkanTexture> m_texture;
 	bool m_dirty;
+	uint64_t m_ulLastConnectorId = 0;
 	bool m_imageEmpty;
 
 	xwayland_ctx_t *m_ctx;

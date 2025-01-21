@@ -130,6 +130,32 @@ namespace gamescope
         return outState;
     }
 
+    static int CreateShmBuffer( uint32_t uSize, void *pData )
+    {
+        char szShmBufferPath[ PATH_MAX ];
+        int nFd = MakeTempFile( szShmBufferPath, k_szGamescopeTempShmTemplate );
+        if ( nFd < 0 )
+            return -1;
+
+        if ( ftruncate( nFd, uSize ) < 0 )
+        {
+            close( nFd );
+            return -1;
+        }
+
+        if ( pData )
+        {
+            void *pMappedData = mmap( nullptr, uSize, PROT_READ | PROT_WRITE, MAP_SHARED, nFd, 0 );
+            if ( pMappedData == MAP_FAILED )
+                return -1;
+            defer( munmap( pMappedData, uSize ) );
+
+            memcpy( pMappedData, pData, uSize );
+        }
+
+        return nFd;
+    }
+
     class CWaylandPlane
     {
     public:
@@ -591,6 +617,9 @@ namespace gamescope
         wl_surface *CursorInfoToSurface( const std::shared_ptr<INestedHints::CursorInfo> &info );
 
         bool SupportsColorManagement() const;
+
+        void SetCursorImage( std::shared_ptr<INestedHints::CursorInfo> info );
+        void SetRelativeMouseMode( wl_surface *pSurface, bool bRelative );
         void UpdateCursor();
 
         friend CWaylandConnector;
@@ -1075,53 +1104,12 @@ namespace gamescope
 
     void CWaylandConnector::SetCursorImage( std::shared_ptr<INestedHints::CursorInfo> info )
     {
-        // XXX(strategy): FIXME FIXME FIXME
-#if 0
-        m_pCursorInfo = info;
-
-        if ( m_pCursorSurface )
-        {
-            wl_surface_destroy( m_pCursorSurface );
-            m_pCursorSurface = nullptr;
-        }
-
-        m_pCursorSurface = CursorInfoToSurface( info );
-
-        UpdateCursor();
-#endif
+        m_pBackend->SetCursorImage( std::move( info ) );
     }
     void CWaylandConnector::SetRelativeMouseMode( bool bRelative )
     {
-        // XXX(strategy): FIXME FIXME FIXME
-#if 0
-        if ( !m_pPointer )
-            return;
-
-        if ( !!bRelative != !!m_pLockedPointer )
-        {
-            if ( m_pLockedPointer )
-            {
-                assert( m_pRelativePointer );
-
-                zwp_locked_pointer_v1_destroy( m_pLockedPointer );
-                m_pLockedPointer = nullptr;
-
-                zwp_relative_pointer_v1_destroy( m_pRelativePointer );
-                m_pRelativePointer = nullptr;
-            }
-            else
-            {
-                assert( !m_pRelativePointer );
-
-                m_pLockedPointer = zwp_pointer_constraints_v1_lock_pointer( m_pPointerConstraints, m_Planes[0].GetSurface(), m_pPointer, nullptr, ZWP_POINTER_CONSTRAINTS_V1_LIFETIME_PERSISTENT );
-                m_pRelativePointer = zwp_relative_pointer_manager_v1_get_relative_pointer( m_pRelativePointerManager, m_pPointer );
-            }
-
-            m_InputThread.SetRelativePointer( bRelative );
-
-            UpdateCursor();
-        }
-#endif
+        // TODO: Do more tracking across multiple connectors, and activity here if we ever want to use this.
+        m_pBackend->SetRelativeMouseMode( m_Planes[0].GetSurface(), bRelative );
     }
     void CWaylandConnector::SetVisible( bool bVisible )
     {
@@ -1140,14 +1128,12 @@ namespace gamescope
     }
     void CWaylandConnector::SetIcon( std::shared_ptr<std::vector<uint32_t>> uIconPixels )
     {
-        // XXX(strategy): FIXME FIXME FIXME
-#if 0
-        if ( !m_pToplevelIconManager )
+        if ( !m_pBackend->GetToplevelIconManager() )
             return;
 
         if ( uIconPixels && uIconPixels->size() >= 3 )
         {
-            xdg_toplevel_icon_v1 *pIcon = xdg_toplevel_icon_manager_v1_create_icon( m_pToplevelIconManager );
+            xdg_toplevel_icon_v1 *pIcon = xdg_toplevel_icon_manager_v1_create_icon( m_pBackend->GetToplevelIconManager() );
             if ( !pIcon )
             {
                 xdg_log.errorf( "Failed to create xdg_toplevel_icon_v1" );
@@ -1168,7 +1154,7 @@ namespace gamescope
             }
             defer( close( nFd ) );
 
-            wl_shm_pool *pPool = wl_shm_create_pool( m_pShm, nFd, uSize );
+            wl_shm_pool *pPool = wl_shm_create_pool( m_pBackend->GetShm(), nFd, uSize );
             defer( wl_shm_pool_destroy( pPool ) );
 
             wl_buffer *pBuffer = wl_shm_pool_create_buffer( pPool, 0, uWidth, uHeight, uStride, WL_SHM_FORMAT_ARGB8888 );
@@ -1176,13 +1162,12 @@ namespace gamescope
 
             xdg_toplevel_icon_v1_add_buffer( pIcon, pBuffer, 1 );
 
-            xdg_toplevel_icon_manager_v1_set_icon( m_pToplevelIconManager, m_Planes[0].GetXdgToplevel(), pIcon );
+            xdg_toplevel_icon_manager_v1_set_icon( m_pBackend->GetToplevelIconManager(), m_Planes[0].GetXdgToplevel(), pIcon );
         }
         else
         {
-            xdg_toplevel_icon_manager_v1_set_icon( m_pToplevelIconManager, m_Planes[0].GetXdgToplevel(), nullptr );
+            xdg_toplevel_icon_manager_v1_set_icon( m_pBackend->GetToplevelIconManager(), m_Planes[0].GetXdgToplevel(), nullptr );
         }
-#endif
     }
 
     void CWaylandConnector::SetSelection( std::shared_ptr<std::string> szContents, GamescopeSelection eSelection )
@@ -2086,32 +2071,6 @@ namespace gamescope
     // INestedHints
     ///////////////////
 
-    static int CreateShmBuffer( uint32_t uSize, void *pData )
-    {
-        char szShmBufferPath[ PATH_MAX ];
-        int nFd = MakeTempFile( szShmBufferPath, k_szGamescopeTempShmTemplate );
-        if ( nFd < 0 )
-            return -1;
-
-        if ( ftruncate( nFd, uSize ) < 0 )
-        {
-            close( nFd );
-            return -1;
-        }
-
-        if ( pData )
-        {
-            void *pMappedData = mmap( nullptr, uSize, PROT_READ | PROT_WRITE, MAP_SHARED, nFd, 0 );
-            if ( pMappedData == MAP_FAILED )
-                return -1;
-            defer( munmap( pMappedData, uSize ) );
-
-            memcpy( pMappedData, pData, uSize );
-        }
-
-        return nFd;
-    }
-
     void CWaylandBackend::OnBackendBlobDestroyed( BackendBlob *pBlob )
     {
         // Do nothing.
@@ -2147,6 +2106,51 @@ namespace gamescope
     bool CWaylandBackend::SupportsColorManagement() const
     {
         return m_pFrogColorMgmtFactory != nullptr || ( m_pXXColorManager != nullptr && m_XXColorManagerFeatures.bSupportsGamescopeColorManagement );
+    }
+
+    void CWaylandBackend::SetCursorImage( std::shared_ptr<INestedHints::CursorInfo> info )
+    {
+        m_pCursorInfo = info;
+
+        if ( m_pCursorSurface )
+        {
+            wl_surface_destroy( m_pCursorSurface );
+            m_pCursorSurface = nullptr;
+        }
+
+        m_pCursorSurface = CursorInfoToSurface( info );
+
+        UpdateCursor();
+    }
+    void CWaylandBackend::SetRelativeMouseMode( wl_surface *pSurface, bool bRelative )
+    {
+        if ( !m_pPointer )
+            return;
+
+        if ( !!bRelative != !!m_pLockedPointer )
+        {
+            if ( m_pLockedPointer )
+            {
+                assert( m_pRelativePointer );
+
+                zwp_locked_pointer_v1_destroy( m_pLockedPointer );
+                m_pLockedPointer = nullptr;
+
+                zwp_relative_pointer_v1_destroy( m_pRelativePointer );
+                m_pRelativePointer = nullptr;
+            }
+            else
+            {
+                assert( !m_pRelativePointer );
+
+                m_pLockedPointer = zwp_pointer_constraints_v1_lock_pointer( m_pPointerConstraints, pSurface, m_pPointer, nullptr, ZWP_POINTER_CONSTRAINTS_V1_LIFETIME_PERSISTENT );
+                m_pRelativePointer = zwp_relative_pointer_manager_v1_get_relative_pointer( m_pRelativePointerManager, m_pPointer );
+            }
+
+            m_InputThread.SetRelativePointer( bRelative );
+
+            UpdateCursor();
+        }
     }
 
     void CWaylandBackend::UpdateCursor()

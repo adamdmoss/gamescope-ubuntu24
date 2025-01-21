@@ -160,6 +160,8 @@ namespace gamescope
     public:
         virtual ~IBackendConnector() {}
 
+        virtual uint64_t GetConnectorID() const = 0;
+
         virtual GamescopeScreenType GetScreenType() const = 0;
         virtual GamescopePanelOrientation GetCurrentOrientation() const = 0;
         virtual bool SupportsHDR() const = 0;
@@ -196,10 +198,12 @@ namespace gamescope
     public:
         CBaseBackendConnector()
         {
+            AssignConnectorId();
         }
         CBaseBackendConnector( uint64_t ulVirtualConnectorKey )
             : m_ulVirtualConnectorKey{ ulVirtualConnectorKey }
         {
+            AssignConnectorId();
         }
 
         virtual ~CBaseBackendConnector()
@@ -207,13 +211,22 @@ namespace gamescope
 
         }
 
+        virtual uint64_t GetConnectorID() const override { return m_ulConnectorId; }
         virtual VBlankScheduleTime FrameSync() override;
         virtual BackendPresentFeedback& PresentationFeedback() override { return m_PresentFeedback; }
         virtual uint64_t GetVirtualConnectorKey() const override { return m_ulVirtualConnectorKey; }
         virtual INestedHints *GetNestedHints() override { return nullptr; }
     protected:
+        uint64_t m_ulConnectorId = 0;
         uint64_t m_ulVirtualConnectorKey = 0;
         BackendPresentFeedback m_PresentFeedback{};
+
+    private:
+        void AssignConnectorId()
+        {
+            static uint64_t s_ulLastConnectorKey = 0;
+            m_ulVirtualConnectorKey = ++s_ulLastConnectorKey;
+        }
     };
 
     class INestedHints
