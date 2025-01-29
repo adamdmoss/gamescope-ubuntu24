@@ -2795,7 +2795,8 @@ namespace gamescope
         // Ideally we'd use this to influence our keymap to clients, eg. x server.
 
         defer( close( nFd ) );
-        assert( uFormat == WL_KEYBOARD_KEYMAP_FORMAT_XKB_V1 );
+        if ( uFormat != WL_KEYBOARD_KEYMAP_FORMAT_XKB_V1 )
+		return;
 
         char *pMap = (char *)mmap( nullptr, uSize, PROT_READ, MAP_PRIVATE, nFd, 0 );
         if ( !pMap || pMap == MAP_FAILED )
