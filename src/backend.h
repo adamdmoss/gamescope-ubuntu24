@@ -224,8 +224,8 @@ namespace gamescope
     private:
         void AssignConnectorId()
         {
-            static uint64_t s_ulLastConnectorKey = 0;
-            m_ulVirtualConnectorKey = ++s_ulLastConnectorKey;
+            static uint64_t s_ulLastConnectorId = 0;
+            m_ulConnectorId = ++s_ulLastConnectorId;
         }
     };
 
