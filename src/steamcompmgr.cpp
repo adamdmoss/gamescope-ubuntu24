@@ -2270,7 +2270,14 @@ bool ShouldDrawCursor()
 	if ( cv_cursor_composite == 0 )
 		return false;
 
-	return g_bForceRelativeMouse || !GetCurrentFocus()->GetNestedHints();
+	if ( g_bForceRelativeMouse )
+		return true;
+
+	global_focus_t *pFocus = GetCurrentFocus();
+	if ( !pFocus )
+		return false;
+
+	return !pFocus->GetNestedHints();
 }
 
 static void
@@ -8363,7 +8370,11 @@ struct wlserver_x11_surface_info *lookup_x11_surface_info_from_xid( gamescope_xw
 
 MouseCursor *steamcompmgr_get_current_cursor()
 {
-	return GetCurrentFocus()->cursor;
+	global_focus_t *pFocus = GetCurrentFocus();
+	if ( !pFocus )
+		return nullptr;
+
+	return pFocus->cursor;
 }
 
 MouseCursor *steamcompmgr_get_server_cursor(uint32_t idx)
