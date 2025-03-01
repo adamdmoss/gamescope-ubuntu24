@@ -7668,6 +7668,19 @@ steamcompmgr_main(int argc, char **argv)
 
 	globalScaleRatio = overscanScaleRatio * zoomScaleRatio;
 
+	if ( gamescope::VirtualConnectorIsSingleOutput() )
+	{
+		// misyl: Make the virtual connector up-front if we are in a single-output mode.
+		// So we don't delay in getting display/output info to the game
+		static constexpr uint64_t k_unSingleOutputVirtualConnectorKey = 0;
+
+		g_VirtualConnectorFocuses[ k_unSingleOutputVirtualConnectorKey ] = global_focus_t
+		{
+			.ulVirtualFocusKey = k_unSingleOutputVirtualConnectorKey,
+			.pVirtualConnector = GetBackend()->UsesVirtualConnectors() ? GetBackend()->CreateVirtualConnector( k_unSingleOutputVirtualConnectorKey ) : nullptr,
+		};
+	}
+
 	for ( auto &iter : g_VirtualConnectorFocuses )
 	{
 		global_focus_t *pFocus = &iter.second;
