@@ -4301,7 +4301,7 @@ map_win(xwayland_ctx_t* ctx, Window id, unsigned long sequence)
 
 	// misyl: Disable appID for overlay types, as parts of the code don't expect that focus-wise.
 	// Fixes mangoapp usage when nested, and not in SteamOS.
-	if ( w->IsAnyOverlay() )
+	if ( w->isExternalOverlay )
 		w->appID = 0;
 
 	get_size_hints(ctx, w);
@@ -4563,7 +4563,7 @@ add_win(xwayland_ctx_t *ctx, Window id, Window prev, unsigned long sequence)
 		new_win->appID = id;
 	}
 
-	if ( new_win->IsAnyOverlay() )
+	if ( new_win->isExternalOverlay )
 		new_win->appID = 0;
 
 	Window transientFor = None;
@@ -5384,7 +5384,7 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 				xwm_log.errorf( "appid clash was %u now %u", w->appID, appID );
 			}
 			w->appID = appID;
-			if ( w->IsAnyOverlay() )
+			if ( w->isExternalOverlay )
 				w->appID = 0;
 
 			MakeFocusDirty();
@@ -5396,7 +5396,7 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 		if (w)
 		{
 			w->isOverlay = get_prop(ctx, w->xwayland().id, ctx->atoms.overlayAtom, 0);
-			if ( w->IsAnyOverlay() )
+			if ( w->isExternalOverlay )
 				w->appID = 0;
 			MakeFocusDirty();
 		}
@@ -5407,7 +5407,7 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 		if (w)
 		{
 			w->isExternalOverlay = get_prop(ctx, w->xwayland().id, ctx->atoms.externalOverlayAtom, 0);
-			if ( w->IsAnyOverlay() )
+			if ( w->isExternalOverlay )
 				w->appID = 0;
 			MakeFocusDirty();
 		}
