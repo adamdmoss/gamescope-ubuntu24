@@ -21,6 +21,7 @@ protocols = [
 	wl_protocol_dir / 'unstable/relative-pointer/relative-pointer-unstable-v1.xml',
 	wl_protocol_dir / 'staging/fractional-scale/fractional-scale-v1.xml',
 	wl_protocol_dir / 'staging/linux-drm-syncobj/linux-drm-syncobj-v1.xml',
+	wl_protocol_dir / 'staging/color-management/color-management-v1.xml',
 
 	# Wayland Protocols not yet in a release.
 	'xdg-toplevel-icon-v1.xml',
@@ -39,9 +40,6 @@ protocols = [
 
 	# wlroots protocols
 	'wlr-layer-shell-unstable-v1.xml',
-
-	# WIP protocols
-	'xx-color-management-v3.xml',
 ]
 
 protocols_client_src = []

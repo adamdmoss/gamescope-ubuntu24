@@ -29,7 +29,7 @@
 #include <single-pixel-buffer-v1-client-protocol.h>
 #include <presentation-time-client-protocol.h>
 #include <frog-color-management-v1-client-protocol.h>
-#include <xx-color-management-v3-client-protocol.h>
+#include <color-management-v1-client-protocol.h>
 #include <pointer-constraints-unstable-v1-client-protocol.h>
 #include <relative-pointer-unstable-v1-client-protocol.h>
 #include <fractional-scale-v1-client-protocol.h>
@@ -241,21 +241,22 @@ namespace gamescope
             uint32_t uMaxFullFrameLuminance );
         static const frog_color_managed_surface_listener s_FrogColorManagedSurfaceListener;
 
-        void Wayland_XXColorManagementSurface_PreferredChanged( xx_color_management_surface_v3 *pColorManagementSurface );
-        static const xx_color_management_surface_v3_listener s_XXColorManagementSurfaceListener;
-        void UpdateXXPreferredColorManagement();
+        void Wayland_WPColorManagementSurfaceFeedback_PreferredChanged( wp_color_management_surface_feedback_v1 *pColorManagementSurface, unsigned int data );
+        static const wp_color_management_surface_feedback_v1_listener s_WPColorManagementSurfaceListener;
+        void UpdateWPPreferredColorManagement();
 
-        void Wayland_XXImageDescriptionInfo_Done( xx_image_description_info_v3 *pImageDescInfo );
-        void Wayland_XXImageDescriptionInfo_ICCFile( xx_image_description_info_v3 *pImageDescInfo, int32_t nICCFd, uint32_t uICCSize );
-        void Wayland_XXImageDescriptionInfo_Primaries( xx_image_description_info_v3 *pImageDescInfo, int32_t nRedX, int32_t nRedY, int32_t nGreenX, int32_t nGreenY, int32_t nBlueX, int32_t nBlueY, int32_t nWhiteX, int32_t nWhiteY );
-        void Wayland_XXImageDescriptionInfo_PrimariesNamed( xx_image_description_info_v3 *pImageDescInfo, uint32_t uPrimaries );
-        void Wayland_XXImageDescriptionInfo_TFPower( xx_image_description_info_v3 *pImageDescInfo, uint32_t uExp);
-        void Wayland_XXImageDescriptionInfo_TFNamed( xx_image_description_info_v3 *pImageDescInfo, uint32_t uTF);
-        void Wayland_XXImageDescriptionInfo_Luminances( xx_image_description_info_v3 *pImageDescInfo, uint32_t uMinLum, uint32_t uMaxLum, uint32_t uRefLum );
-        void Wayland_XXImageDescriptionInfo_TargetPrimaries( xx_image_description_info_v3 *pImageDescInfo, int32_t nRedX, int32_t nRedY, int32_t nGreenX, int32_t nGreenY, int32_t nBlueX, int32_t nBlueY, int32_t nWhiteX, int32_t nWhiteY );
-        void Wayland_XXImageDescriptionInfo_TargetLuminance( xx_image_description_info_v3 *pImageDescInfo, uint32_t uMinLum, uint32_t uMaxLum );
-        void Wayland_XXImageDescriptionInfo_Target_MaxCLL( xx_image_description_info_v3 *pImageDescInfo, uint32_t uMaxCLL );
-        void Wayland_XXImageDescriptionInfo_Target_MaxFALL( xx_image_description_info_v3 *pImageDescInfo, uint32_t uMaxFALL );
+        void Wayland_WPImageDescriptionInfo_Done( wp_image_description_info_v1 *pImageDescInfo );
+        void Wayland_WPImageDescriptionInfo_ICCFile( wp_image_description_info_v1 *pImageDescInfo, int32_t nICCFd, uint32_t uICCSize );
+        void Wayland_WPImageDescriptionInfo_Primaries( wp_image_description_info_v1 *pImageDescInfo, int32_t nRedX, int32_t nRedY, int32_t nGreenX, int32_t nGreenY, int32_t nBlueX, int32_t nBlueY, int32_t nWhiteX, int32_t nWhiteY );
+        void Wayland_WPImageDescriptionInfo_PrimariesNamed( wp_image_description_info_v1 *pImageDescInfo, uint32_t uPrimaries );
+        void Wayland_WPImageDescriptionInfo_TFPower( wp_image_description_info_v1 *pImageDescInfo, uint32_t uExp);
+        void Wayland_WPImageDescriptionInfo_TFNamed( wp_image_description_info_v1 *pImageDescInfo, uint32_t uTF);
+        void Wayland_WPImageDescriptionInfo_Luminances( wp_image_description_info_v1 *pImageDescInfo, uint32_t uMinLum, uint32_t uMaxLum, uint32_t uRefLum );
+        void Wayland_WPImageDescriptionInfo_TargetPrimaries( wp_image_description_info_v1 *pImageDescInfo, int32_t nRedX, int32_t nRedY, int32_t nGreenX, int32_t nGreenY, int32_t nBlueX, int32_t nBlueY, int32_t nWhiteX, int32_t nWhiteY );
+        void Wayland_WPImageDescriptionInfo_TargetLuminance( wp_image_description_info_v1 *pImageDescInfo, uint32_t uMinLum, uint32_t uMaxLum );
+        void Wayland_WPImageDescriptionInfo_Target_MaxCLL( wp_image_description_info_v1 *pImageDescInfo, uint32_t uMaxCLL );
+        void Wayland_WPImageDescriptionInfo_Target_MaxFALL( wp_image_description_info_v1 *pImageDescInfo, uint32_t uMaxFALL );
+        static const wp_image_description_info_v1_listener s_ImageDescriptionInfoListener;
 
         void Wayland_FractionalScale_PreferredScale( wp_fractional_scale_v1 *pFractionalScale, uint32_t uScale );
         static const wp_fractional_scale_v1_listener s_FractionalScaleListener;
@@ -268,7 +269,7 @@ namespace gamescope
         libdecor_frame *m_pFrame = nullptr;
         wl_subsurface *m_pSubsurface = nullptr;
         frog_color_managed_surface *m_pFrogColorManagedSurface = nullptr;
-        xx_color_management_surface_v3 *m_pXXColorManagedSurface = nullptr;
+        wp_color_management_surface_feedback_v1 *m_pWPColorManagedSurface = nullptr;
         wp_fractional_scale_v1 *m_pFractionalScale = nullptr;
         libdecor_window_state m_eWindowState = LIBDECOR_WINDOW_STATE_NONE;
         std::vector<wl_output *> m_pOutputs;
@@ -304,9 +305,23 @@ namespace gamescope
     {
         .preferred_metadata = WAYLAND_USERDATA_TO_THIS( CWaylandPlane, Wayland_FrogColorManagedSurface_PreferredMetadata ),
     };
-    const xx_color_management_surface_v3_listener CWaylandPlane::s_XXColorManagementSurfaceListener =
+    const wp_color_management_surface_feedback_v1_listener CWaylandPlane::s_WPColorManagementSurfaceListener =
     {
-        .preferred_changed = WAYLAND_USERDATA_TO_THIS( CWaylandPlane, Wayland_XXColorManagementSurface_PreferredChanged ),
+        .preferred_changed = WAYLAND_USERDATA_TO_THIS( CWaylandPlane, Wayland_WPColorManagementSurfaceFeedback_PreferredChanged ),
+    };
+    const wp_image_description_info_v1_listener CWaylandPlane::s_ImageDescriptionInfoListener =
+    {
+        .done = WAYLAND_USERDATA_TO_THIS( CWaylandPlane, Wayland_WPImageDescriptionInfo_Done ),
+        .icc_file = WAYLAND_USERDATA_TO_THIS( CWaylandPlane, Wayland_WPImageDescriptionInfo_ICCFile ),
+        .primaries = WAYLAND_USERDATA_TO_THIS( CWaylandPlane, Wayland_WPImageDescriptionInfo_Primaries ),
+        .primaries_named = WAYLAND_USERDATA_TO_THIS( CWaylandPlane, Wayland_WPImageDescriptionInfo_PrimariesNamed ),
+        .tf_power = WAYLAND_USERDATA_TO_THIS( CWaylandPlane, Wayland_WPImageDescriptionInfo_TFPower ),
+        .tf_named = WAYLAND_USERDATA_TO_THIS( CWaylandPlane, Wayland_WPImageDescriptionInfo_TFNamed ),
+        .luminances = WAYLAND_USERDATA_TO_THIS( CWaylandPlane, Wayland_WPImageDescriptionInfo_Luminances ),
+        .target_primaries = WAYLAND_USERDATA_TO_THIS( CWaylandPlane, Wayland_WPImageDescriptionInfo_TargetPrimaries ),
+        .target_luminance = WAYLAND_USERDATA_TO_THIS( CWaylandPlane, Wayland_WPImageDescriptionInfo_TargetLuminance ),
+        .target_max_cll = WAYLAND_USERDATA_TO_THIS( CWaylandPlane, Wayland_WPImageDescriptionInfo_Target_MaxCLL ),
+        .target_max_fall = WAYLAND_USERDATA_TO_THIS( CWaylandPlane, Wayland_WPImageDescriptionInfo_Target_MaxFALL ),
     };
     const wp_fractional_scale_v1_listener CWaylandPlane::s_FractionalScaleListener =
     {
@@ -588,7 +603,7 @@ namespace gamescope
         wp_viewporter *GetViewporter() const { return m_pViewporter; }
         wp_presentation *GetPresentation() const { return m_pPresentation; }
         frog_color_management_factory_v1 *GetFrogColorManagementFactory() const { return m_pFrogColorMgmtFactory; }
-        xx_color_manager_v3 *GetXXColorManager() const { return m_pXXColorManager; }
+        wp_color_manager_v1 *GetWPColorManager() const { return m_pWPColorManager; }
         wp_fractional_scale_manager_v1 *GetFractionalScaleManager() const { return m_pFractionalScaleManager; }
         xdg_toplevel_icon_manager_v1 *GetToplevelIconManager() const { return m_pToplevelIconManager; }
         libdecor *GetLibDecor() const { return m_pLibDecor; }
@@ -637,11 +652,12 @@ namespace gamescope
         void Wayland_Keyboard_Leave( wl_keyboard *pKeyboard, uint32_t uSerial, wl_surface *pSurface );
         static const wl_keyboard_listener s_KeyboardListener;
 
-        void Wayland_XXColorManager_SupportedIntent( xx_color_manager_v3 *pXXColorManager, uint32_t uRenderIntent );
-        void Wayland_XXColorManager_SupportedFeature( xx_color_manager_v3 *pXXColorManager, uint32_t uFeature );
-        void Wayland_XXColorManager_SupportedTFNamed( xx_color_manager_v3 *pXXColorManager, uint32_t uTF );
-        void Wayland_XXColorManager_SupportedPrimariesNamed( xx_color_manager_v3 *pXXColorManager, uint32_t uPrimaries );
-        static const xx_color_manager_v3_listener s_XXColorManagerListener;
+        void Wayland_WPColorManager_SupportedIntent( wp_color_manager_v1 *pWPColorManager, uint32_t uRenderIntent );
+        void Wayland_WPColorManager_SupportedFeature( wp_color_manager_v1 *pWPColorManager, uint32_t uFeature );
+        void Wayland_WPColorManager_SupportedTFNamed( wp_color_manager_v1 *pWPColorManager, uint32_t uTF );
+        void Wayland_WPColorManager_SupportedPrimariesNamed( wp_color_manager_v1 *pWPColorManager, uint32_t uPrimaries );
+        void Wayland_WPColorManager_ColorManagerDone( wp_color_manager_v1 *pWPColorManager );
+        static const wp_color_manager_v1_listener s_WPColorManagerListener;
 
         CWaylandInputThread m_InputThread;
 
@@ -662,21 +678,21 @@ namespace gamescope
         OwningRc<CVulkanTexture> m_pBlackTexture;
         wp_presentation *m_pPresentation = nullptr;
         frog_color_management_factory_v1 *m_pFrogColorMgmtFactory = nullptr;
-        xx_color_manager_v3 *m_pXXColorManager = nullptr;
+        wp_color_manager_v1 *m_pWPColorManager = nullptr;
         zwp_pointer_constraints_v1 *m_pPointerConstraints = nullptr;
         zwp_relative_pointer_manager_v1 *m_pRelativePointerManager = nullptr;
         wp_fractional_scale_manager_v1 *m_pFractionalScaleManager = nullptr;
         xdg_toplevel_icon_manager_v1 *m_pToplevelIconManager = nullptr;
 
-        struct 
+        struct
         {
-            std::vector<xx_color_manager_v3_primaries> ePrimaries;
-            std::vector<xx_color_manager_v3_transfer_function> eTransferFunctions;
-            std::vector<xx_color_manager_v3_render_intent> eRenderIntents;
-            std::vector<xx_color_manager_v3_feature> eFeatures;
+            std::vector<wp_color_manager_v1_primaries> ePrimaries;
+            std::vector<wp_color_manager_v1_transfer_function> eTransferFunctions;
+            std::vector<wp_color_manager_v1_render_intent> eRenderIntents;
+            std::vector<wp_color_manager_v1_feature> eFeatures;
 
             bool bSupportsGamescopeColorManagement = false; // Has everything we want and need?
-        } m_XXColorManagerFeatures;
+        } m_WPColorManagerFeatures;
 
         std::unordered_map<wl_output *, WaylandOutputInfo> m_pOutputs;
 
@@ -748,12 +764,14 @@ namespace gamescope
         .modifiers     = WAYLAND_NULL(),
         .repeat_info   = WAYLAND_NULL(),
     };
-    const xx_color_manager_v3_listener CWaylandBackend::s_XXColorManagerListener
+
+    const wp_color_manager_v1_listener CWaylandBackend::s_WPColorManagerListener
     {
-        .supported_intent          = WAYLAND_USERDATA_TO_THIS( CWaylandBackend, Wayland_XXColorManager_SupportedIntent ),
-        .supported_feature         = WAYLAND_USERDATA_TO_THIS( CWaylandBackend, Wayland_XXColorManager_SupportedFeature ),
-        .supported_tf_named        = WAYLAND_USERDATA_TO_THIS( CWaylandBackend, Wayland_XXColorManager_SupportedTFNamed ),
-        .supported_primaries_named = WAYLAND_USERDATA_TO_THIS( CWaylandBackend, Wayland_XXColorManager_SupportedPrimariesNamed ),
+        .supported_intent          = WAYLAND_USERDATA_TO_THIS( CWaylandBackend, Wayland_WPColorManager_SupportedIntent ),
+        .supported_feature         = WAYLAND_USERDATA_TO_THIS( CWaylandBackend, Wayland_WPColorManager_SupportedFeature ),
+        .supported_tf_named        = WAYLAND_USERDATA_TO_THIS( CWaylandBackend, Wayland_WPColorManager_SupportedTFNamed ),
+        .supported_primaries_named = WAYLAND_USERDATA_TO_THIS( CWaylandBackend, Wayland_WPColorManager_SupportedPrimariesNamed ),
+        .done        = WAYLAND_USERDATA_TO_THIS( CWaylandBackend, Wayland_WPColorManager_ColorManagerDone ),
     };
 
     //////////////////
@@ -907,6 +925,8 @@ namespace gamescope
 
     CWaylandPlane::~CWaylandPlane()
     {
+        if ( m_pWPColorManagedSurface )
+            wp_color_management_surface_feedback_v1_destroy( m_pWPColorManagedSurface );
     }
 
     bool CWaylandPlane::Init( CWaylandPlane *pParent, CWaylandPlane *pSiblingBelow )
@@ -919,15 +939,15 @@ namespace gamescope
 
         m_pViewport = wp_viewporter_get_viewport( m_pBackend->GetViewporter(), m_pSurface );
 
-        if ( m_pBackend->GetXXColorManager() )
+        if ( m_pBackend->GetWPColorManager() )
         {
-            m_pXXColorManagedSurface = xx_color_manager_v3_get_surface( m_pBackend->GetXXColorManager(), m_pSurface );
+            m_pWPColorManagedSurface = wp_color_manager_v1_get_surface_feedback( m_pBackend->GetWPColorManager(), m_pSurface );
 
             // Only add the listener for the toplevel to avoid useless spam.
             if ( !pParent )
-                xx_color_management_surface_v3_add_listener( m_pXXColorManagedSurface, &s_XXColorManagementSurfaceListener, this );
+                wp_color_management_surface_feedback_v1_add_listener( m_pWPColorManagedSurface, &s_WPColorManagementSurfaceListener, this );
 
-            UpdateXXPreferredColorManagement();
+            UpdateWPPreferredColorManagement();
         }
         else if ( m_pBackend->GetFrogColorManagementFactory() )
         {
@@ -994,7 +1014,7 @@ namespace gamescope
                 wp_presentation_feedback_add_listener( pFeedback, &s_PresentationFeedbackListener, this );
             }
 
-            if ( m_pXXColorManagedSurface )
+            if ( m_pWPColorManagedSurface )
             {
                 // TODO: Actually use this.
             }
@@ -1280,61 +1300,82 @@ namespace gamescope
 
     //
 
-    void CWaylandPlane::Wayland_XXColorManagementSurface_PreferredChanged( xx_color_management_surface_v3 *pColorManagementSurface )
+    void CWaylandPlane::Wayland_WPColorManagementSurfaceFeedback_PreferredChanged( wp_color_management_surface_feedback_v1 *pColorManagementSurface, unsigned int data)
     {
-        UpdateXXPreferredColorManagement();
+        UpdateWPPreferredColorManagement();
     }
 
-    void CWaylandPlane::UpdateXXPreferredColorManagement()
+    void CWaylandPlane::UpdateWPPreferredColorManagement()
     {
         if ( m_pParent )
             return;
 
-        xx_image_description_v3 *pImageDescription = xx_color_management_surface_v3_get_preferred( m_pXXColorManagedSurface );
-        xx_image_description_info_v3 *pImageDescInfo = xx_image_description_v3_get_information( pImageDescription );
-        static const xx_image_description_info_v3_listener s_Listener
-        {
-
-        };
-        xx_image_description_info_v3_add_listener( pImageDescInfo, &s_Listener, this );
+        wp_image_description_v1 *pImageDescription = wp_color_management_surface_feedback_v1_get_preferred( m_pWPColorManagedSurface );
+        wp_image_description_info_v1 *pImageDescInfo = wp_image_description_v1_get_information( pImageDescription );
+        wp_image_description_info_v1_add_listener( pImageDescInfo, &s_ImageDescriptionInfoListener, this );
         wl_display_roundtrip( m_pBackend->GetDisplay() );
 
-        xx_image_description_info_v3_destroy( pImageDescInfo );
-        xx_image_description_v3_destroy( pImageDescription );
+        wp_image_description_info_v1_destroy( pImageDescInfo );
+        wp_image_description_v1_destroy( pImageDescription );
     }
 
-    void CWaylandPlane::Wayland_XXImageDescriptionInfo_Done( xx_image_description_info_v3 *pImageDescInfo )
+    void CWaylandPlane::Wayland_WPImageDescriptionInfo_Done( wp_image_description_info_v1 *pImageDescInfo )
     {
-        
+
     }
-    void CWaylandPlane::Wayland_XXImageDescriptionInfo_ICCFile( xx_image_description_info_v3 *pImageDescInfo, int32_t nICCFd, uint32_t uICCSize )
+    void CWaylandPlane::Wayland_WPImageDescriptionInfo_ICCFile( wp_image_description_info_v1 *pImageDescInfo, int32_t nICCFd, uint32_t uICCSize )
     {
         if ( nICCFd >= 0 )
             close( nICCFd );
     }
-    void CWaylandPlane::Wayland_XXImageDescriptionInfo_Primaries( xx_image_description_info_v3 *pImageDescInfo, int32_t nRedX, int32_t nRedY, int32_t nGreenX, int32_t nGreenY, int32_t nBlueX, int32_t nBlueY, int32_t nWhiteX, int32_t nWhiteY )
+    void CWaylandPlane::Wayland_WPImageDescriptionInfo_Primaries( wp_image_description_info_v1 *pImageDescInfo, int32_t nRedX, int32_t nRedY, int32_t nGreenX, int32_t nGreenY, int32_t nBlueX, int32_t nBlueY, int32_t nWhiteX, int32_t nWhiteY )
     {
-        
+
     }
-    void CWaylandPlane::Wayland_XXImageDescriptionInfo_PrimariesNamed( xx_image_description_info_v3 *pImageDescInfo, uint32_t uPrimaries )
+    void CWaylandPlane::Wayland_WPImageDescriptionInfo_PrimariesNamed( wp_image_description_info_v1 *pImageDescInfo, uint32_t uPrimaries )
     {
-        
+
     }
-    void CWaylandPlane::Wayland_XXImageDescriptionInfo_TFPower( xx_image_description_info_v3 *pImageDescInfo, uint32_t uExp)
+    void CWaylandPlane::Wayland_WPImageDescriptionInfo_TFPower( wp_image_description_info_v1 *pImageDescInfo, uint32_t uExp)
     {
-        
+
     }
-    void CWaylandPlane::Wayland_XXImageDescriptionInfo_TFNamed( xx_image_description_info_v3 *pImageDescInfo, uint32_t uTF)
+    static const char *TFToString( uint32_t uTF )
+    {
+        switch ( (wp_color_manager_v1_transfer_function) uTF )
+        {
+            case WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_BT1886: return "BT1886";
+            case WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_GAMMA22: return "GAMMA22";
+            case WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_GAMMA28: return "GAMMA28";
+            case WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_ST240: return "ST240";
+            case WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_EXT_LINEAR: return "EXT_LINEAR";
+            case WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_LOG_100: return "LOG_100";
+            case WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_LOG_316: return "LOG_316";
+            case WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_XVYCC: return "XVYCC";
+            case WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_SRGB: return "SRGB";
+            case WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_EXT_SRGB: return "EXT_SRGB";
+            case WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_ST2084_PQ: return "ST2084_PQ";
+            case WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_ST428: return "ST428";
+            case WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_HLG: return "HLG";
+            default: return "Unknown";
+        }
+    }
+    void CWaylandPlane::Wayland_WPImageDescriptionInfo_TFNamed( wp_image_description_info_v1 *pImageDescInfo, uint32_t uTF)
     {
         auto *pHDRInfo = &m_pBackend->m_Connector.m_HDRInfo;
-        pHDRInfo->bExposeHDRSupport   = ( cv_hdr_enabled && uTF == XX_COLOR_MANAGER_V3_TRANSFER_FUNCTION_ST2084_PQ );
-        pHDRInfo->eOutputEncodingEOTF = ( cv_hdr_enabled && uTF == XX_COLOR_MANAGER_V3_TRANSFER_FUNCTION_ST2084_PQ ) ? EOTF_PQ : EOTF_Gamma22;
+        pHDRInfo->bExposeHDRSupport   = ( cv_hdr_enabled && uTF == WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_ST2084_PQ );
+        pHDRInfo->eOutputEncodingEOTF = ( cv_hdr_enabled && uTF == WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_ST2084_PQ ) ? EOTF_PQ : EOTF_Gamma22;
+
+        xdg_log.infof( "HDR INFO" );
+        xdg_log.infof( "  cv_hdr_enabled: %s", cv_hdr_enabled ? "true" : "false" );
+        xdg_log.infof( "  uTF: %s", TFToString( uTF ) );
+        xdg_log.infof( "  bExposeHDRSupport: %s", pHDRInfo->bExposeHDRSupport ? "true" : "false" );
     }
-    void CWaylandPlane::Wayland_XXImageDescriptionInfo_Luminances( xx_image_description_info_v3 *pImageDescInfo, uint32_t uMinLum, uint32_t uMaxLum, uint32_t uRefLum )
+    void CWaylandPlane::Wayland_WPImageDescriptionInfo_Luminances( wp_image_description_info_v1 *pImageDescInfo, uint32_t uMinLum, uint32_t uMaxLum, uint32_t uRefLum )
     {
-        
+
     }
-    void CWaylandPlane::Wayland_XXImageDescriptionInfo_TargetPrimaries( xx_image_description_info_v3 *pImageDescInfo, int32_t nRedX, int32_t nRedY, int32_t nGreenX, int32_t nGreenY, int32_t nBlueX, int32_t nBlueY, int32_t nWhiteX, int32_t nWhiteY )
+    void CWaylandPlane::Wayland_WPImageDescriptionInfo_TargetPrimaries( wp_image_description_info_v1 *pImageDescInfo, int32_t nRedX, int32_t nRedY, int32_t nGreenX, int32_t nGreenY, int32_t nBlueX, int32_t nBlueY, int32_t nWhiteX, int32_t nWhiteY )
     {
         auto *pDisplayColorimetry = &m_pBackend->m_Connector.m_DisplayColorimetry;
         pDisplayColorimetry->primaries.r = glm::vec2{ nRedX / 10000.0f, nRedY / 10000.0f };
@@ -1342,16 +1383,17 @@ namespace gamescope
         pDisplayColorimetry->primaries.b = glm::vec2{ nBlueX / 10000.0f, nBlueY / 10000.0f };
         pDisplayColorimetry->white = glm::vec2{ nWhiteX / 10000.0f, nWhiteY / 10000.0f };
     }
-    void CWaylandPlane::Wayland_XXImageDescriptionInfo_TargetLuminance( xx_image_description_info_v3 *pImageDescInfo, uint32_t uMinLum, uint32_t uMaxLum )
+    void CWaylandPlane::Wayland_WPImageDescriptionInfo_TargetLuminance( wp_image_description_info_v1 *pImageDescInfo, uint32_t uMinLum, uint32_t uMaxLum )
     {
-        
+
     }
-    void CWaylandPlane::Wayland_XXImageDescriptionInfo_Target_MaxCLL( xx_image_description_info_v3 *pImageDescInfo, uint32_t uMaxCLL )
+    void CWaylandPlane::Wayland_WPImageDescriptionInfo_Target_MaxCLL( wp_image_description_info_v1 *pImageDescInfo, uint32_t uMaxCLL )
     {
         auto *pHDRInfo = &m_pBackend->m_Connector.m_HDRInfo;
         pHDRInfo->uMaxContentLightLevel = uMaxCLL;
+        xdg_log.infof( "uMaxContentLightLevel: %u", uMaxCLL );
     }
-    void CWaylandPlane::Wayland_XXImageDescriptionInfo_Target_MaxFALL( xx_image_description_info_v3 *pImageDescInfo, uint32_t uMaxFALL )
+    void CWaylandPlane::Wayland_WPImageDescriptionInfo_Target_MaxFALL( wp_image_description_info_v1 *pImageDescInfo, uint32_t uMaxFALL )
     {
         auto *pHDRInfo = &m_pBackend->m_Connector.m_HDRInfo;
         pHDRInfo->uMaxFrameAverageLuminance = uMaxFALL;
@@ -1457,33 +1499,33 @@ namespace gamescope
         wl_registry_destroy( pRegistry );
         pRegistry = nullptr;
 
-        if ( m_pXXColorManager )
+        if ( m_pWPColorManager )
         {
-            m_XXColorManagerFeatures.bSupportsGamescopeColorManagement = [this]() -> bool
+            m_WPColorManagerFeatures.bSupportsGamescopeColorManagement = [this]() -> bool
             {
                 // Features
-                if ( !Algorithm::Contains( m_XXColorManagerFeatures.eFeatures, XX_COLOR_MANAGER_V3_FEATURE_PARAMETRIC ) )
+                if ( !Algorithm::Contains( m_WPColorManagerFeatures.eFeatures, WP_COLOR_MANAGER_V1_FEATURE_PARAMETRIC ) )
                     return false;
-                if ( !Algorithm::Contains( m_XXColorManagerFeatures.eFeatures, XX_COLOR_MANAGER_V3_FEATURE_SET_PRIMARIES ) )
+                if ( !Algorithm::Contains( m_WPColorManagerFeatures.eFeatures, WP_COLOR_MANAGER_V1_FEATURE_SET_PRIMARIES ) )
                     return false;
-                if ( !Algorithm::Contains( m_XXColorManagerFeatures.eFeatures, XX_COLOR_MANAGER_V3_FEATURE_SET_MASTERING_DISPLAY_PRIMARIES ) )
+                if ( !Algorithm::Contains( m_WPColorManagerFeatures.eFeatures, WP_COLOR_MANAGER_V1_FEATURE_SET_MASTERING_DISPLAY_PRIMARIES ) )
                     return false;
-                if ( !Algorithm::Contains( m_XXColorManagerFeatures.eFeatures, XX_COLOR_MANAGER_V3_FEATURE_EXTENDED_TARGET_VOLUME ) )
+                if ( !Algorithm::Contains( m_WPColorManagerFeatures.eFeatures, WP_COLOR_MANAGER_V1_FEATURE_EXTENDED_TARGET_VOLUME ) )
                     return false;
-                if ( !Algorithm::Contains( m_XXColorManagerFeatures.eFeatures, XX_COLOR_MANAGER_V3_FEATURE_SET_LUMINANCES ) )
+                if ( !Algorithm::Contains( m_WPColorManagerFeatures.eFeatures, WP_COLOR_MANAGER_V1_FEATURE_SET_LUMINANCES ) )
                     return false;
 
                 // Transfer Functions
-                if ( !Algorithm::Contains( m_XXColorManagerFeatures.eTransferFunctions, XX_COLOR_MANAGER_V3_TRANSFER_FUNCTION_SRGB ) )
+                if ( !Algorithm::Contains( m_WPColorManagerFeatures.eTransferFunctions, WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_SRGB ) )
                     return false;
-                if ( !Algorithm::Contains( m_XXColorManagerFeatures.eTransferFunctions, XX_COLOR_MANAGER_V3_TRANSFER_FUNCTION_ST2084_PQ ) )
+                if ( !Algorithm::Contains( m_WPColorManagerFeatures.eTransferFunctions, WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_ST2084_PQ ) )
                     return false;
-                // TODO: Need scRGB 
+                // TODO: Need scRGB
 
                 // Primaries
-                if ( !Algorithm::Contains( m_XXColorManagerFeatures.ePrimaries, XX_COLOR_MANAGER_V3_PRIMARIES_SRGB ) )
+                if ( !Algorithm::Contains( m_WPColorManagerFeatures.ePrimaries, WP_COLOR_MANAGER_V1_PRIMARIES_SRGB ) )
                     return false;
-                if ( !Algorithm::Contains( m_XXColorManagerFeatures.ePrimaries, XX_COLOR_MANAGER_V3_PRIMARIES_BT2020 ) )
+                if ( !Algorithm::Contains( m_WPColorManagerFeatures.ePrimaries, WP_COLOR_MANAGER_V1_PRIMARIES_BT2020 ) )
                     return false;
 
                 return true;
@@ -1595,7 +1637,7 @@ namespace gamescope
         if ( SupportsFormat( DRM_FORMAT_XRGB8888 ) )
             u8BitFormat = DRM_FORMAT_XRGB8888;
         else if ( SupportsFormat( DRM_FORMAT_XBGR8888 ) )
-            u8BitFormat = DRM_FORMAT_XBGR8888;        
+            u8BitFormat = DRM_FORMAT_XBGR8888;
         else if ( SupportsFormat( DRM_FORMAT_ARGB8888 ) )
             u8BitFormat = DRM_FORMAT_ARGB8888;
         else if ( SupportsFormat( DRM_FORMAT_ABGR8888 ) )
@@ -1919,6 +1961,7 @@ namespace gamescope
         }
 
         return nFd;
+        return m_pFrogColorMgmtFactory != nullptr || ( m_pWPColorManager != nullptr && m_WPColorManagerFeatures.bSupportsGamescopeColorManagement );
     }
 
     void CWaylandBackend::SetCursorImage( std::shared_ptr<INestedHints::CursorInfo> info )
@@ -2178,10 +2221,10 @@ namespace gamescope
         {
             m_pFrogColorMgmtFactory = (frog_color_management_factory_v1 *)wl_registry_bind( pRegistry, uName, &frog_color_management_factory_v1_interface, 1u );
         }
-        else if ( !strcmp( pInterface, xx_color_manager_v3_interface.name ) )
+        else if ( !strcmp( pInterface, wp_color_manager_v1_interface.name ) )
         {
-            m_pXXColorManager = (xx_color_manager_v3 *)wl_registry_bind( pRegistry, uName, &xx_color_manager_v3_interface, 1u );
-            xx_color_manager_v3_add_listener( m_pXXColorManager, &s_XXColorManagerListener, this );
+            m_pWPColorManager = (wp_color_manager_v1 *)wl_registry_bind( pRegistry, uName, &wp_color_manager_v1_interface, 1u );
+            wp_color_manager_v1_add_listener( m_pWPColorManager, &s_WPColorManagerListener, this );
         }
         else if ( !strcmp( pInterface, zwp_pointer_constraints_v1_interface.name ) )
         {
@@ -2322,23 +2365,27 @@ namespace gamescope
         UpdateCursor();
     }
 
-    // XX Color Manager
+    // WP Color Manager
 
-    void CWaylandBackend::Wayland_XXColorManager_SupportedIntent( xx_color_manager_v3 *pXXColorManager, uint32_t uRenderIntent )
+    void CWaylandBackend::Wayland_WPColorManager_SupportedIntent( wp_color_manager_v1 *pWPColorManager, uint32_t uRenderIntent )
     {
-        m_XXColorManagerFeatures.eRenderIntents.push_back( static_cast<xx_color_manager_v3_render_intent>( uRenderIntent ) );
+        m_WPColorManagerFeatures.eRenderIntents.push_back( static_cast<wp_color_manager_v1_render_intent>( uRenderIntent ) );
     }
-    void CWaylandBackend::Wayland_XXColorManager_SupportedFeature( xx_color_manager_v3 *pXXColorManager, uint32_t uFeature )
+    void CWaylandBackend::Wayland_WPColorManager_SupportedFeature( wp_color_manager_v1 *pWPColorManager, uint32_t uFeature )
     {
-        m_XXColorManagerFeatures.eFeatures.push_back( static_cast<xx_color_manager_v3_feature>( uFeature ) );
+        m_WPColorManagerFeatures.eFeatures.push_back( static_cast<wp_color_manager_v1_feature>( uFeature ) );
     }
-    void CWaylandBackend::Wayland_XXColorManager_SupportedTFNamed( xx_color_manager_v3 *pXXColorManager, uint32_t uTF )
+    void CWaylandBackend::Wayland_WPColorManager_SupportedTFNamed( wp_color_manager_v1 *pWPColorManager, uint32_t uTF )
     {
-        m_XXColorManagerFeatures.eTransferFunctions.push_back( static_cast<xx_color_manager_v3_transfer_function>( uTF ) );
+        m_WPColorManagerFeatures.eTransferFunctions.push_back( static_cast<wp_color_manager_v1_transfer_function>( uTF ) );
     }
-    void CWaylandBackend::Wayland_XXColorManager_SupportedPrimariesNamed( xx_color_manager_v3 *pXXColorManager, uint32_t uPrimaries )
+    void CWaylandBackend::Wayland_WPColorManager_SupportedPrimariesNamed( wp_color_manager_v1 *pWPColorManager, uint32_t uPrimaries )
     {
-        m_XXColorManagerFeatures.ePrimaries.push_back( static_cast<xx_color_manager_v3_primaries>( uPrimaries ) );
+        m_WPColorManagerFeatures.ePrimaries.push_back( static_cast<wp_color_manager_v1_primaries>( uPrimaries ) );
+    }
+    void CWaylandBackend::Wayland_WPColorManager_ColorManagerDone( wp_color_manager_v1 *pWPColorManager )
+    {
+
     }
 
     ///////////////////////
