@@ -184,4 +184,14 @@ namespace gamescope
 
         GetBackend()->DumpDebugInfo();
     });
+
+    ConCommand cc_backend_set_dirty( "backend_set_dirty", "Dirty the backend state and re-poll",
+    []( std::span<std::string_view> svArgs )
+    {
+        if ( !GetBackend() )
+            return;
+
+        GetBackend()->DirtyState( true, true );
+    });
+
 }
