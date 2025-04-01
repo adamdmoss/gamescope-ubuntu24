@@ -81,6 +81,8 @@ struct saved_mode {
 	int refresh;
 };
 
+gamescope::ConVar<bool> cv_drm_ignore_internal_connectors( "drm_ignore_internal_connectors", false, "Disable internal displays for good, for debugging." );
+
 namespace gamescope
 {
 	class CDRMPlane;
@@ -785,6 +787,17 @@ static bool refresh_state( drm_t *drm )
 		drmModeConnector *pConnector = drmModeGetConnector( drm->fd, uConnectorId );
 		if ( !pConnector )
 			continue;
+
+		if ( cv_drm_ignore_internal_connectors )
+		{
+			if ( pConnector->connector_type == DRM_MODE_CONNECTOR_eDP ||
+				pConnector->connector_type == DRM_MODE_CONNECTOR_LVDS ||
+				pConnector->connector_type == DRM_MODE_CONNECTOR_DSI )
+			{
+				drmModeFreeConnector( pConnector );
+				continue;
+			}
+		}
 
 		if ( !drm->connectors.contains( uConnectorId ) )
 		{
@@ -2679,6 +2692,9 @@ void drm_rollback( struct drm_t *drm )
  * negative errno on failure or if the scene-graph can't be presented directly. */
 int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameInfo )
 {
+	if ( !drm->pConnector )
+		return -EACCES;
+
 	drm_update_color_mgmt(drm);
 
 	const bool bIsVRRCapable = drm->pConnector && drm->pConnector->GetProperties().vrr_capable && !!drm->pConnector->GetProperties().vrr_capable->GetCurrentValue();
@@ -3509,7 +3525,7 @@ namespace gamescope
 				if ( g_DRM.current.mode_id == 0 )
 				{
 					xwm_log.errorf("We failed our modeset and have no mode to fall back to! (Initial modeset failed?): %s", strerror(-ret));
-					abort();
+					return 0;
 				}
 
 				xwm_log.errorf("Failed to prepare 1-layer flip (%s), trying again with previous mode if modeset needed", strerror( -ret ));
