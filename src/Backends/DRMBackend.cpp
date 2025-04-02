@@ -378,6 +378,7 @@ namespace gamescope
 		const char *GetName() const override { return m_Mutable.szName; }
 		const char *GetMake() const override { return m_Mutable.pszMake; }
 		const char *GetModel() const override { return m_Mutable.szModel; }
+		const char *GetDataString() const { return m_Mutable.szDataString; }
 		uint32_t GetPossibleCRTCMask() const { return m_Mutable.uPossibleCRTCMask; }
 		std::span<const uint32_t> GetValidDynamicRefreshRates() const override { return m_Mutable.ValidDynamicRefreshRates; }
 		const displaycolorimetry_t& GetDisplayColorimetry() const { return m_Mutable.DisplayColorimetry; }
@@ -494,6 +495,7 @@ namespace gamescope
 			char szName[32]{};
 			char szMakePNP[4]{};
 			char szModel[16]{};
+			char szDataString[16]{};
 			const char *pszMake = ""; // Not owned, no free. This is a pointer to pnp db or szMakePNP.
 			DRMModeGenerator fnDynamicModeGenerator;
 			std::vector<uint32_t> ValidDynamicRefreshRates{};
@@ -2171,12 +2173,18 @@ namespace gamescope
 		for ( size_t i = 0; pDescriptors[i] != nullptr; i++ )
 		{
 			const di_edid_display_descriptor *pDesc = pDescriptors[i];
-			if ( di_edid_display_descriptor_get_tag( pDesc ) == DI_EDID_DISPLAY_DESCRIPTOR_PRODUCT_NAME )
+			const di_edid_display_descriptor_tag eTag = di_edid_display_descriptor_get_tag( pDesc );
+			if ( eTag == DI_EDID_DISPLAY_DESCRIPTOR_PRODUCT_NAME )
 			{
 				// Max length of di_edid_display_descriptor_get_string is 14
 				// m_szModel is 16 bytes.
 				const char *pszModel = di_edid_display_descriptor_get_string( pDesc );
 				strncpy( m_Mutable.szModel, pszModel, sizeof( m_Mutable.szModel ) );
+			}
+			else if ( eTag == DI_EDID_DISPLAY_DESCRIPTOR_DATA_STRING )
+			{
+				const char *pszDataString = di_edid_display_descriptor_get_string( pDesc );
+				strncpy( m_Mutable.szDataString, pszDataString, sizeof( m_Mutable.szDataString ) );
 			}
 		}
 
@@ -2190,7 +2198,7 @@ namespace gamescope
 		{
 			CScriptScopedLock script;
 
-			auto oKnownDisplay = script.Manager().Gamescope().Config.LookupDisplay( script, m_Mutable.szMakePNP, pProduct->product, m_Mutable.szModel );
+			auto oKnownDisplay = script.Manager().Gamescope().Config.LookupDisplay( script, m_Mutable.szMakePNP, pProduct->product, m_Mutable.szModel, m_Mutable.szDataString );
 			if ( oKnownDisplay )
 			{
 				sol::table tTable = oKnownDisplay->second;
