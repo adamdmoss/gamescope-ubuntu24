@@ -2230,6 +2230,17 @@ static void paint_pipewire()
 	s_ulLastFocusCommitId = ulFocusCommitId;
 	s_ulLastOverrideCommitId = ulOverrideCommitId;
 
+	uint32_t uWidth = s_pPipewireBuffer->texture->width();
+	uint32_t uHeight = s_pPipewireBuffer->texture->height();
+
+	const uint32_t uCompositeDebugBackup = g_uCompositeDebug;
+	const uint32_t uBackupWidth = currentOutputWidth;
+	const uint32_t uBackupHeight = currentOutputHeight;
+
+	g_uCompositeDebug = 0;
+	currentOutputWidth = uWidth;
+	currentOutputHeight = uHeight;
+
 	// Paint the windows we have onto the Pipewire stream.
 	paint_window( pFocus->focusWindow, pFocus->focusWindow, &frameInfo, nullptr, 0, 1.0f, pFocus->overrideWindow );
 
@@ -2237,19 +2248,20 @@ static void paint_pipewire()
 		paint_window( pFocus->overrideWindow, pFocus->focusWindow, &frameInfo, nullptr, PaintWindowFlag::NoFilter, 1.0f, pFocus->overrideWindow );
 
 	gamescope::Rc<CVulkanTexture> pRGBTexture = s_pPipewireBuffer->texture->isYcbcr()
-		? vulkan_acquire_screenshot_texture( g_nOutputWidth, g_nOutputHeight, false, DRM_FORMAT_XRGB2101010 )
+		? vulkan_acquire_screenshot_texture( uWidth, uHeight, false, DRM_FORMAT_XRGB2101010 )
 		: gamescope::Rc<CVulkanTexture>{ s_pPipewireBuffer->texture };
 
 	gamescope::Rc<CVulkanTexture> pYUVTexture = s_pPipewireBuffer->texture->isYcbcr() ? s_pPipewireBuffer->texture : nullptr;
 
-	uint32_t uCompositeDebugBackup = g_uCompositeDebug;
-	g_uCompositeDebug = 0;
 
 	std::optional<uint64_t> oPipewireSequence = vulkan_screenshot( &frameInfo, pRGBTexture, pYUVTexture );
 	// If we ever want the fat compositing path, use this.
 	//std::optional<uint64_t> oPipewireSequence = vulkan_composite( &frameInfo, s_pPipewireBuffer->texture, false, pRGBTexture, false );
 
 	g_uCompositeDebug = uCompositeDebugBackup;
+
+	currentOutputWidth = uBackupWidth;
+	currentOutputHeight = uBackupHeight;
 
 	if ( oPipewireSequence )
 	{
