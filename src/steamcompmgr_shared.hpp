@@ -133,6 +133,8 @@ struct steamcompmgr_win_t {
 	bool maybe_a_dropdown = false;
 	bool outdatedInteractiveFocus = false;
 
+	uint64_t last_commit_first_latch_time = 0;
+
 	bool hasHwndStyle = false;
 	uint32_t hwndStyle = 0;
 	bool hasHwndStyleEx = false;
