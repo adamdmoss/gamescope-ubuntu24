@@ -2574,7 +2574,7 @@ paint_all(bool async)
 		}
 	}
 
-	if ( GetBackend()->Present( &frameInfo, async ) != 0 )
+	if ( GetBackend() && GetBackend()->Present( &frameInfo, async ) != 0 )
 	{
 		return;
 	}
