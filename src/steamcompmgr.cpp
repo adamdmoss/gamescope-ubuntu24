@@ -2616,7 +2616,7 @@ paint_all( global_focus_t *pFocus, bool async )
 		}
 	}
 
-	if ( pConnector->Present( &frameInfo, async ) != 0 )
+	if ( pConnector && pConnector->Present( &frameInfo, async ) != 0 )
 	{
 		return;
 	}
