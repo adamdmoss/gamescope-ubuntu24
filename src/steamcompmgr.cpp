@@ -2019,8 +2019,8 @@ paint_window_commit( const gamescope::Rc<commit_t> &lastCommit, steamcompmgr_win
 
 		if ( zoomScaleRatio != 1.0 )
 		{
-			drawXOffset += (((int)sourceWidth / 2) - cursor->x()) * currentScaleRatio_x;
-			drawYOffset += (((int)sourceHeight / 2) - cursor->y()) * currentScaleRatio_y;
+			drawXOffset += (((int)sourceWidth / 2) - (cursor ? cursor->x() : 0)) * currentScaleRatio_x;
+			drawYOffset += (((int)sourceHeight / 2) - (cursor ? cursor->y() : 0)) * currentScaleRatio_y;
 		}
 	}
 
