@@ -721,6 +721,7 @@ namespace gamescope
         wl_pointer *m_pPointer = nullptr;
         wl_touch *m_pTouch = nullptr;
         zwp_locked_pointer_v1 *m_pLockedPointer = nullptr;
+        wl_surface *m_pLockedSurface = nullptr;
         zwp_relative_pointer_v1 *m_pRelativePointer = nullptr;
 
         bool m_bCanUseModifiers = false;
@@ -2082,7 +2083,7 @@ namespace gamescope
         if ( !m_pPointer )
             return;
 
-        if ( !!bRelative != !!m_pLockedPointer )
+        if ( !!bRelative != !!m_pLockedPointer || ( pSurface != m_pLockedSurface && bRelative ) )
         {
             if ( m_pLockedPointer )
             {
@@ -2094,11 +2095,10 @@ namespace gamescope
                 zwp_relative_pointer_v1_destroy( m_pRelativePointer );
                 m_pRelativePointer = nullptr;
             }
-            else
-            {
-                assert( !m_pRelativePointer );
 
-                m_pLockedPointer = zwp_pointer_constraints_v1_lock_pointer( m_pPointerConstraints, m_Planes[0].GetSurface(), m_pPointer, nullptr, ZWP_POINTER_CONSTRAINTS_V1_LIFETIME_PERSISTENT );
+            if ( bRelative )
+            {
+                m_pLockedPointer = zwp_pointer_constraints_v1_lock_pointer( m_pPointerConstraints, pSurface, m_pPointer, nullptr, ZWP_POINTER_CONSTRAINTS_V1_LIFETIME_PERSISTENT );
                 m_pRelativePointer = zwp_relative_pointer_manager_v1_get_relative_pointer( m_pRelativePointerManager, m_pPointer );
             }
 
@@ -2630,6 +2630,8 @@ namespace gamescope
 
     void CWaylandInputThread::SetRelativePointer( bool bRelative )
     {
+        if ( bRelative == !!m_pRelativePointer.load() )
+            return;
         // This constructors/destructors the display's mutex, so should be safe to do across threads.
         if ( !bRelative )
         {
