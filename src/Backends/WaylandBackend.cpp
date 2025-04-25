@@ -272,6 +272,7 @@ namespace gamescope
         std::vector<wl_output *> m_pOutputs;
         bool m_bNeedsDecorCommit = false;
         uint32_t m_uFractionalScale = 120;
+        bool m_bHasRecievedScale = false;
 
         std::mutex m_PlaneStateLock;
         std::optional<WaylandPlaneState> m_oCurrentPlaneState;
@@ -1358,14 +1359,31 @@ namespace gamescope
 
     void CWaylandPlane::Wayland_FractionalScale_PreferredScale( wp_fractional_scale_v1 *pFractionalScale, uint32_t uScale )
     {
+        bool bDirty = false;
+
+        static uint32_t s_uGlobalFractionalScale = 120;
+        if ( s_uGlobalFractionalScale != uScale )
+        {
+            if ( m_bHasRecievedScale )
+            {
+                g_nOutputWidth  = ( g_nOutputWidth  * uScale ) / m_uFractionalScale;
+                g_nOutputHeight = ( g_nOutputHeight * uScale ) / m_uFractionalScale;
+            }
+
+            s_uGlobalFractionalScale = uScale;
+            bDirty = true;
+        }
+
         if ( m_uFractionalScale != uScale )
         {
-            g_nOutputWidth  = ( g_nOutputWidth  * uScale ) / m_uFractionalScale;
-            g_nOutputHeight = ( g_nOutputHeight * uScale ) / m_uFractionalScale;
-
             m_uFractionalScale = uScale;
-            force_repaint();
+            bDirty = true;
         }
+
+        m_bHasRecievedScale = true;
+
+        if ( bDirty )
+            force_repaint();
     }
 
     ////////////////
