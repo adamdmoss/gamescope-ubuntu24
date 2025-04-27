@@ -96,6 +96,8 @@ namespace gamescope
     gamescope::ConVar<bool> cv_wayland_mouse_relmotion_without_keyboard_focus( "wayland_mouse_relmotion_without_keyboard_focus", false, "Should we only forward mouse relative motion to the app when we have keyboard focus?" );
     gamescope::ConVar<bool> cv_wayland_use_modifiers( "wayland_use_modifiers", true, "Use DMA-BUF modifiers?" );
 
+    gamescope::ConVar<float> cv_wayland_hdr10_saturation_scale( "wayland_hdr10_saturation_scale", 1.0, "Saturation scale for HDR10 content by gamut expansion. 1.0 - 1.2 is a good range to play with." );
+
     class CWaylandConnector;
     class CWaylandPlane;
     class CWaylandBackend;
@@ -1058,7 +1060,24 @@ namespace gamescope
                     else if ( oState->eColorspace == GAMESCOPE_APP_TEXTURE_COLORSPACE_HDR10_PQ )
                     {
                         wp_image_description_creator_params_v1 *pParams = wp_color_manager_v1_create_parametric_creator( m_pBackend->GetWPColorManager() );
-                        wp_image_description_creator_params_v1_set_primaries_named( pParams, WP_COLOR_MANAGER_V1_PRIMARIES_BT2020 );
+
+                        double flScale = cv_wayland_hdr10_saturation_scale;
+                        if ( close_enough( flScale, 1.0f ) )
+                        {
+                            wp_image_description_creator_params_v1_set_primaries_named( pParams, WP_COLOR_MANAGER_V1_PRIMARIES_BT2020 );
+                        }
+                        else
+                        {
+                            wp_image_description_creator_params_v1_set_primaries( pParams,
+                                (int32_t)(0.708 * flScale * 1'000'000.0),
+                                (int32_t)(0.292 / flScale * 1'000'000.0),
+                                (int32_t)(0.170 / flScale * 1'000'000.0),
+                                (int32_t)(0.797 * flScale * 1'000'000.0),
+                                (int32_t)(0.131 / flScale * 1'000'000.0),
+                                (int32_t)(0.046 / flScale * 1'000'000.0),
+                                (int32_t)(0.3127 * 1'000'000.0),
+                                (int32_t)(0.3290 * 1'000'000.0) );
+                        }
                         wp_image_description_creator_params_v1_set_tf_named( pParams, WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_ST2084_PQ );
                         if ( m_ColorState->pHDRMetadata )
                         {
