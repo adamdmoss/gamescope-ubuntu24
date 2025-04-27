@@ -298,6 +298,7 @@ struct FrameInfo_t
 		bool applyColorMgmt; // drm only
 
 		std::shared_ptr<gamescope::BackendBlob> ctm;
+		std::shared_ptr<gamescope::BackendBlob> hdr_metadata_blob;
 
 		GamescopeAppTextureColorspace colorspace;
 

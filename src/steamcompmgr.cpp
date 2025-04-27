@@ -1804,6 +1804,7 @@ void MouseCursor::paint(steamcompmgr_win_t *window, steamcompmgr_win_t *fit, str
 	layer->filter = cursor_scale != 1.0f ? GamescopeUpscaleFilter::LINEAR : GamescopeUpscaleFilter::NEAREST;
 	layer->blackBorder = false;
 	layer->ctm = nullptr;
+	layer->hdr_metadata_blob = nullptr;
 	layer->colorspace = GAMESCOPE_APP_TEXTURE_COLORSPACE_SRGB;
 }
 
@@ -1851,6 +1852,11 @@ paint_cached_base_layer(const gamescope::Rc<commit_t>& commit, const BaseLayerIn
 	layer->opacity = bOverrideOpacity ? flOpacityScale : base.opacity * flOpacityScale;
 
 	layer->colorspace = commit->colorspace();
+	layer->hdr_metadata_blob = nullptr;
+	if (commit->feedback)
+	{
+		layer->hdr_metadata_blob = commit->feedback->hdr_metadata_blob;
+	}
 	layer->ctm = nullptr;
 	if (layer->colorspace == GAMESCOPE_APP_TEXTURE_COLORSPACE_SCRGB)
 		layer->ctm = s_scRGB709To2020Matrix;
@@ -2034,6 +2040,11 @@ paint_window_commit( const gamescope::Rc<commit_t> &lastCommit, steamcompmgr_win
 	}
 
 	layer->colorspace = lastCommit->colorspace();
+	layer->hdr_metadata_blob = nullptr;
+	if (lastCommit->feedback)
+	{
+		layer->hdr_metadata_blob = lastCommit->feedback->hdr_metadata_blob;
+	}
 	layer->ctm = nullptr;
 	if (layer->colorspace == GAMESCOPE_APP_TEXTURE_COLORSPACE_SCRGB)
 		layer->ctm = s_scRGB709To2020Matrix;
@@ -2447,6 +2458,7 @@ paint_all(bool async)
 			layer->applyColorMgmt = g_ColorMgmt.pending.enabled;
 
 			layer->colorspace = GAMESCOPE_APP_TEXTURE_COLORSPACE_LINEAR;
+			layer->hdr_metadata_blob = nullptr;
 			layer->ctm = nullptr;
 			layer->tex = tex;
 
@@ -2555,6 +2567,7 @@ paint_all(bool async)
 		layer->scale = vec2_t{ 1.0f, 1.0f };
 		layer->blackBorder = true;
 		layer->colorspace = GAMESCOPE_APP_TEXTURE_COLORSPACE_PASSTHRU;
+		layer->hdr_metadata_blob = nullptr;
 		layer->opacity = 1.0f;
 		layer->zpos = g_zposMuraCorrection;
 		layer->filter = GamescopeUpscaleFilter::NEAREST;

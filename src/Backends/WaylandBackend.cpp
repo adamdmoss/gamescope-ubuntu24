@@ -165,6 +165,7 @@ namespace gamescope
         int32_t nDstWidth;
         int32_t nDstHeight;
         GamescopeAppTextureColorspace eColorspace;
+        std::shared_ptr<gamescope::BackendBlob> pHDRMetadata;
         bool bOpaque;
         uint32_t uFractionalScale;
     };
@@ -183,6 +184,15 @@ namespace gamescope
         outState.flSrcHeight = flClippedSrcHeight;
         return outState;
     }
+
+    struct WaylandPlaneColorState
+    {
+        GamescopeAppTextureColorspace eColorspace;
+        std::shared_ptr<gamescope::BackendBlob> pHDRMetadata;
+
+        bool operator ==( const WaylandPlaneColorState &other ) const = default;
+        bool operator !=( const WaylandPlaneColorState &other ) const = default;
+    };
 
     class CWaylandPlane
     {
@@ -277,6 +287,9 @@ namespace gamescope
         bool m_bNeedsDecorCommit = false;
         uint32_t m_uFractionalScale = 120;
         bool m_bHasRecievedScale = false;
+
+        std::optional<WaylandPlaneColorState> m_ColorState{};
+        wp_image_description_v1 *m_pCurrentImageDescription = nullptr;
 
         std::mutex m_PlaneStateLock;
         std::optional<WaylandPlaneState> m_oCurrentPlaneState;
@@ -1022,10 +1035,63 @@ namespace gamescope
 
             if ( m_pWPColorManagedSurface )
             {
-                wp_image_description_v1 *pDescription = m_pBackend->GetWPImageDescription( oState->eColorspace );
-                if ( pDescription )
+                WaylandPlaneColorState colorState =
                 {
-                    wp_color_management_surface_v1_set_image_description( m_pWPColorManagedSurface, pDescription, WP_COLOR_MANAGER_V1_RENDER_INTENT_PERCEPTUAL );
+                    .eColorspace  = oState->eColorspace,
+                    .pHDRMetadata = oState->pHDRMetadata,
+                };
+
+                if ( !m_ColorState || *m_ColorState != colorState )
+                {
+                    m_ColorState = colorState;
+
+                    if ( m_pCurrentImageDescription )
+                    {
+                        wp_image_description_v1_destroy( m_pCurrentImageDescription );
+                        m_pCurrentImageDescription = nullptr;
+                    }
+
+                    if ( oState->eColorspace == GAMESCOPE_APP_TEXTURE_COLORSPACE_SCRGB )
+                    {
+                        m_pCurrentImageDescription = wp_color_manager_v1_create_windows_scrgb( m_pBackend->GetWPColorManager() );
+                    }
+                    else if ( oState->eColorspace == GAMESCOPE_APP_TEXTURE_COLORSPACE_HDR10_PQ )
+                    {
+                        wp_image_description_creator_params_v1 *pParams = wp_color_manager_v1_create_parametric_creator( m_pBackend->GetWPColorManager() );
+                        wp_image_description_creator_params_v1_set_primaries_named( pParams, WP_COLOR_MANAGER_V1_PRIMARIES_BT2020 );
+                        wp_image_description_creator_params_v1_set_tf_named( pParams, WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_ST2084_PQ );
+                        if ( m_ColorState->pHDRMetadata )
+                        {
+                            const hdr_metadata_infoframe *pInfoframe = &m_ColorState->pHDRMetadata->View<hdr_output_metadata>().hdmi_metadata_type1;
+
+                            wp_image_description_creator_params_v1_set_mastering_display_primaries( pParams,
+                                // Rescale...
+                                (((int32_t)pInfoframe->display_primaries[0].x) * 1'000'000) / 0xC350,
+                                (((int32_t)pInfoframe->display_primaries[0].y) * 1'000'000) / 0xC350,
+                                (((int32_t)pInfoframe->display_primaries[1].x) * 1'000'000) / 0xC350,
+                                (((int32_t)pInfoframe->display_primaries[1].y) * 1'000'000) / 0xC350,
+                                (((int32_t)pInfoframe->display_primaries[2].x) * 1'000'000) / 0xC350,
+                                (((int32_t)pInfoframe->display_primaries[2].y) * 1'000'000) / 0xC350,
+                                (((int32_t)pInfoframe->white_point.x) * 1'000'000) / 0xC350,
+                                (((int32_t)pInfoframe->white_point.y) * 1'000'000) / 0xC350);
+
+                            wp_image_description_creator_params_v1_set_mastering_luminance( pParams,
+                                pInfoframe->min_display_mastering_luminance,
+                                pInfoframe->max_display_mastering_luminance );
+
+                            wp_image_description_creator_params_v1_set_max_cll( pParams,
+                                pInfoframe->max_cll );
+
+                            wp_image_description_creator_params_v1_set_max_fall( pParams,
+                                pInfoframe->max_fall );
+                        }
+                        m_pCurrentImageDescription = wp_image_description_creator_params_v1_create( pParams );
+                    }
+                }
+
+                if ( m_pCurrentImageDescription )
+                {
+                    wp_color_management_surface_v1_set_image_description( m_pWPColorManagedSurface, m_pCurrentImageDescription, WP_COLOR_MANAGER_V1_RENDER_INTENT_PERCEPTUAL );
                 }
                 else
                 {
@@ -1144,6 +1210,7 @@ namespace gamescope
                     .nDstWidth   = int32_t( ceil( pLayer->tex->width() / double( pLayer->scale.x ) ) ),
                     .nDstHeight  = int32_t( ceil( pLayer->tex->height() / double( pLayer->scale.y ) ) ),
                     .eColorspace = pLayer->colorspace,
+                    .pHDRMetadata = pLayer->hdr_metadata_blob,
                     .bOpaque     = pLayer->zpos == g_zposBase,
                     .uFractionalScale = GetScale(),
                 } ) );
