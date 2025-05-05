@@ -2083,7 +2083,7 @@ namespace gamescope
         if ( !m_pPointer )
             return;
 
-        if ( !!bRelative != !!m_pLockedPointer || ( pSurface != m_pLockedSurface && bRelative ) )
+        if ( !!bRelative != !!m_pLockedPointer || ( m_Planes[0].GetSurface() != m_pLockedSurface && bRelative ) )
         {
             if ( m_pLockedPointer )
             {
@@ -2098,7 +2098,7 @@ namespace gamescope
 
             if ( bRelative )
             {
-                m_pLockedPointer = zwp_pointer_constraints_v1_lock_pointer( m_pPointerConstraints, pSurface, m_pPointer, nullptr, ZWP_POINTER_CONSTRAINTS_V1_LIFETIME_PERSISTENT );
+                m_pLockedPointer = zwp_pointer_constraints_v1_lock_pointer( m_pPointerConstraints, m_Planes[0].GetSurface(), m_pPointer, nullptr, ZWP_POINTER_CONSTRAINTS_V1_LIFETIME_PERSISTENT );
                 m_pRelativePointer = zwp_relative_pointer_manager_v1_get_relative_pointer( m_pRelativePointerManager, m_pPointer );
             }
 
