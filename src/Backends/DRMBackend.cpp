@@ -73,14 +73,6 @@ gamescope::ConVar<bool> cv_drm_debug_disable_explicit_sync( "drm_debug_disable_e
 gamescope::ConVar<bool> cv_drm_debug_disable_in_fence_fd( "drm_debug_disable_in_fence_fd", false, "Force disable IN_FENCE_FD being set to avoid over-synchronization on the DRM backend." );
 
 gamescope::ConVar<bool> cv_drm_allow_dynamic_modes_for_external_display( "drm_allow_dynamic_modes_for_external_display", false, "Allow dynamic mode/refresh rate switching for external displays." );
-enum GamescopeBroadcastRGBMode_t : uint32_t
-{
-	GAMESCOPE_BROADCAST_RGB_MODE_AUTOMATIC = 0,
-	GAMESCOPE_BROADCAST_RGB_MODE_FULL = 1,
-	GAMESCOPE_BROADCAST_RGB_MODE_LIMITED = 2,
-};
-
-	GamescopeBroadcastRGBMode_t broadcast_mode;
 gamescope::ConVar<bool> cv_drm_ignore_internal_connectors( "drm_ignore_internal_connectors", false, "Disable internal displays for good, for debugging." );
 
 namespace gamescope
@@ -434,10 +426,18 @@ namespace gamescope
 	};
 }
 
+enum GamescopeBroadcastRGBMode_t : uint32_t
+{
+	GAMESCOPE_BROADCAST_RGB_MODE_AUTOMATIC = 0,
+	GAMESCOPE_BROADCAST_RGB_MODE_FULL = 1,
+	GAMESCOPE_BROADCAST_RGB_MODE_LIMITED = 2,
+};
+
 struct saved_mode {
 	int width;
 	int height;
 	int refresh;
+	GamescopeBroadcastRGBMode_t broadcast_mode;
 };
 
 struct drm_t {

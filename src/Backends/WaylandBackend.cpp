@@ -2061,7 +2061,6 @@ namespace gamescope
         }
 
         return nFd;
-        return m_pFrogColorMgmtFactory != nullptr || ( m_pWPColorManager != nullptr && m_WPColorManagerFeatures.bSupportsGamescopeColorManagement );
     }
 
     void CWaylandBackend::SetCursorImage( std::shared_ptr<INestedHints::CursorInfo> info )
@@ -2210,7 +2209,7 @@ namespace gamescope
 
     bool CWaylandBackend::SupportsColorManagement() const
     {
-        return m_pFrogColorMgmtFactory != nullptr || ( m_pXXColorManager != nullptr && m_XXColorManagerFeatures.bSupportsGamescopeColorManagement );
+        return m_pFrogColorMgmtFactory != nullptr || ( m_pWPColorManager != nullptr && m_WPColorManagerFeatures.bSupportsGamescopeColorManagement );
     }
 
     void CWaylandBackend::UpdateCursor()
