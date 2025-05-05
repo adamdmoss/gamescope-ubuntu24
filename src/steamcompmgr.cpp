@@ -1929,7 +1929,7 @@ paint_window_commit( const gamescope::Rc<commit_t> &lastCommit, steamcompmgr_win
 
 	layer->filter = ( flags & PaintWindowFlag::NoFilter ) ? GamescopeUpscaleFilter::LINEAR : g_upscaleFilter;
 
-	layer->tex = lastCommit->GetTexture( layer->filter, g_upscaleScaler );
+	layer->tex = lastCommit->GetTexture( layer->filter, g_upscaleScaler, layer->colorspace );
 
 	if (notificationMode)
 	{
@@ -2041,7 +2041,6 @@ paint_window_commit( const gamescope::Rc<commit_t> &lastCommit, steamcompmgr_win
 		layer->zpos = g_zposExternalOverlay;
 	}
 
-	layer->colorspace = lastCommit->colorspace();
 	layer->hdr_metadata_blob = nullptr;
 	if (lastCommit->feedback)
 	{
@@ -6538,15 +6537,13 @@ void update_wayland_res(CommitDoneList_t *doneCommits, steamcompmgr_win_t *w, Re
 					g_nOutputWidth,
 					g_nOutputHeight,
 					pTempImage->pTexture,
+					upscaledFrameInfo.outputEncodingEOTF == EOTF_Gamma22 ? VK_COLOR_SPACE_SRGB_NONLINEAR_KHR : VK_COLOR_SPACE_HDR10_ST2084_EXT,
 				};
 
 				// Manifest a new acquire timeline point with this inline work.
 				eventFd = gamescope::CAcquireTimelinePoint( pTempImage->pReleaseTimeline, ulNextReleasePoint ).CreateEventFd();
 
 				//xwm_log.infof( "Pre-emptively upscaling!" );
-
-				if ( newCommit->feedback )
-					newCommit->feedback->vk_colorspace = upscaledFrameInfo.outputEncodingEOTF == EOTF_Gamma22 ? VK_COLOR_SPACE_SRGB_NONLINEAR_KHR : VK_COLOR_SPACE_HDR10_ST2084_EXT;
 			}
 			else
 			{

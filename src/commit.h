@@ -3,6 +3,7 @@
 
 #include <optional>
 #include "main.hpp"
+#include "rendervulkan.hpp"
 
 class CVulkanTexture;
 
@@ -12,7 +13,8 @@ struct UpscaledTexture_t
 	GamescopeUpscaleScaler eScaler{};
 	uint32_t uOutputWidth = 0;
 	uint32_t uOutputHeight = 0;
-	gamescope::Rc<CVulkanTexture> pTexture;
+	gamescope::Rc<CVulkanTexture> pTexture{};
+	VkColorSpaceKHR colorspace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
 };
 
 struct commit_t final : public gamescope::RcObject, public gamescope::IWaitable, public gamescope::NonCopyable
@@ -40,15 +42,19 @@ struct commit_t final : public gamescope::RcObject, public gamescope::IWaitable,
 	gamescope::Rc<CVulkanTexture> vulkanTex;
 	std::optional<UpscaledTexture_t> upscaledTexture;
 
-	gamescope::Rc<CVulkanTexture> GetTexture( GamescopeUpscaleFilter eFilter, GamescopeUpscaleScaler eScaler )
+	gamescope::Rc<CVulkanTexture> GetTexture( GamescopeUpscaleFilter eFilter, GamescopeUpscaleScaler eScaler, GamescopeAppTextureColorspace &colorspace )
 	{
 		if ( upscaledTexture &&
 			 upscaledTexture->eFilter == eFilter &&
 			 upscaledTexture->eScaler == eScaler &&
 			 upscaledTexture->uOutputWidth == g_nOutputWidth &&
 			 upscaledTexture->uOutputHeight == g_nOutputHeight )
+		{
+			colorspace = VkColorSpaceToGamescopeAppTextureColorSpace( upscaledTexture->pTexture->format(), upscaledTexture->colorspace );
 			return upscaledTexture->pTexture;
+		}
 
+		colorspace = this->colorspace();
 		return vulkanTex;
 	}
 
