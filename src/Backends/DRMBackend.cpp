@@ -73,6 +73,14 @@ gamescope::ConVar<bool> cv_drm_debug_disable_explicit_sync( "drm_debug_disable_e
 gamescope::ConVar<bool> cv_drm_debug_disable_in_fence_fd( "drm_debug_disable_in_fence_fd", false, "Force disable IN_FENCE_FD being set to avoid over-synchronization on the DRM backend." );
 
 gamescope::ConVar<bool> cv_drm_allow_dynamic_modes_for_external_display( "drm_allow_dynamic_modes_for_external_display", false, "Allow dynamic mode/refresh rate switching for external displays." );
+enum GamescopeBroadcastRGBMode_t : uint32_t
+{
+	GAMESCOPE_BROADCAST_RGB_MODE_AUTOMATIC = 0,
+	GAMESCOPE_BROADCAST_RGB_MODE_FULL = 1,
+	GAMESCOPE_BROADCAST_RGB_MODE_LIMITED = 2,
+};
+
+	GamescopeBroadcastRGBMode_t broadcast_mode;
 gamescope::ConVar<bool> cv_drm_ignore_internal_connectors( "drm_ignore_internal_connectors", false, "Disable internal displays for good, for debugging." );
 
 namespace gamescope
@@ -281,6 +289,7 @@ namespace gamescope
 			std::optional<CDRMAtomicProperty> HDR_OUTPUT_METADATA;
 			std::optional<CDRMAtomicProperty> vrr_capable;
 			std::optional<CDRMAtomicProperty> EDID;
+			std::optional<CDRMAtomicProperty> Broadcast_RGB;
 			std::optional<CDRMAtomicProperty> DUMMY_END;
 		};
 		      ConnectorProperties &GetProperties()       { return m_Props; }
@@ -953,7 +962,12 @@ static bool get_saved_mode(const char *description, saved_mode &mode_info)
     while (fgets(line, sizeof(line), file))
 	{
 		char saved_description[256];
-        bool valid = sscanf(line, "%255[^:]:%dx%d@%d", saved_description, &mode_info.width, &mode_info.height, &mode_info.refresh) == 4;
+		uint32_t broadcast_mode = 0;
+        int ret = sscanf(line, "%255[^:]:%dx%d@%d %u", saved_description, &mode_info.width, &mode_info.height, &mode_info.refresh, &broadcast_mode);
+
+		mode_info.broadcast_mode = (GamescopeBroadcastRGBMode_t) broadcast_mode;
+		
+		bool valid = ret == 4 || ret == 5;
 
 		if (valid && !strcmp(saved_description, description))
 		{
@@ -964,6 +978,8 @@ static bool get_saved_mode(const char *description, saved_mode &mode_info)
 	fclose(file);
 	return false;
 }
+
+static GamescopeBroadcastRGBMode_t s_ExternalBroadcastRGBMode = GAMESCOPE_BROADCAST_RGB_MODE_AUTOMATIC;
 
 static bool setup_best_connector(struct drm_t *drm, bool force, bool initial)
 {
@@ -1027,6 +1043,8 @@ static bool setup_best_connector(struct drm_t *drm, bool force, bool initial)
 		snprintf(description, sizeof(description), "External screen");
 	}
 
+	s_ExternalBroadcastRGBMode = GAMESCOPE_BROADCAST_RGB_MODE_AUTOMATIC;
+
 	const drmModeModeInfo *mode = nullptr;
 	if ( drm->preferred_width != 0 || drm->preferred_height != 0 || drm->preferred_refresh != 0 )
 	{
@@ -1034,9 +1052,12 @@ static bool setup_best_connector(struct drm_t *drm, bool force, bool initial)
 	}
 
 	if (!mode && best->GetScreenType() == gamescope::GAMESCOPE_SCREEN_TYPE_EXTERNAL) {
-		saved_mode mode_info;
+		saved_mode mode_info{};
 		if (get_saved_mode(description, mode_info))
+		{
+			s_ExternalBroadcastRGBMode = mode_info.broadcast_mode;
 			mode = find_mode(best->GetModeConnector(), mode_info.width, mode_info.height, mode_info.refresh);
+		}
 	}
 
 	if (!mode) {
@@ -1317,6 +1338,27 @@ bool init_drm(struct drm_t *drm, int width, int height, int refresh)
 
 	return true;
 }
+
+void OnSleepScreenChanged( gamescope::ConVar<bool> & )
+{
+	force_repaint();
+}
+
+gamescope::ConVar<bool> cv_drm_sleep_screens[] =
+{
+	{ "drm_sleep_internal_screen", false, "Force the internal screen to be asleep", OnSleepScreenChanged },
+	{ "drm_sleep_external_screen", false, "Force the external screen to be asleep", OnSleepScreenChanged },
+};
+
+void drm_sleep_screen( gamescope::GamescopeScreenType eType, bool bSleep )
+{
+	if ( cv_drm_sleep_screens[ eType ] == bSleep )
+		return;
+
+	cv_drm_sleep_screens[ eType ] = bSleep;
+}
+
+
 
 void finish_drm(struct drm_t *drm)
 {
@@ -2054,6 +2096,7 @@ namespace gamescope
 			m_Props.HDR_OUTPUT_METADATA      = CDRMAtomicProperty::Instantiate( "HDR_OUTPUT_METADATA",    this, *rawProperties );
 			m_Props.vrr_capable              = CDRMAtomicProperty::Instantiate( "vrr_capable",            this, *rawProperties );
 			m_Props.EDID                     = CDRMAtomicProperty::Instantiate( "EDID",                   this, *rawProperties );
+			m_Props.Broadcast_RGB            = CDRMAtomicProperty::Instantiate( "Broadcast RGB",          this, *rawProperties );
 		}
 
 		ParseEDID();
@@ -2770,11 +2813,26 @@ int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameI
 	uint32_t flags = DRM_MODE_ATOMIC_NONBLOCK;
 
 	// We do internal refcounting with these events
-	if ( drm->pCRTC != nullptr )
-		flags |= DRM_MODE_PAGE_FLIP_EVENT;
 
-	if ( async || g_bForceAsyncFlips )
-		flags |= DRM_MODE_PAGE_FLIP_ASYNC;
+	bool bSleep = false;
+	if ( drm->pConnector )
+	{
+		bSleep = cv_drm_sleep_screens[ drm->pConnector->GetScreenType() ];
+
+		bool bCurrentlyAsleep = drm->pConnector->GetProperties().CRTC_ID->GetCurrentValue() == 0;
+
+		if ( bCurrentlyAsleep != bSleep )
+			needs_modeset = true;
+	}
+
+	if ( !bSleep )
+	{
+		if ( drm->pCRTC != nullptr )
+			flags |= DRM_MODE_PAGE_FLIP_EVENT;
+
+		if ( async || g_bForceAsyncFlips )
+			flags |= DRM_MODE_PAGE_FLIP_ASYNC;
+	}
 
 	bool bForceInRequest = needs_modeset;
 
@@ -2800,6 +2858,9 @@ int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameI
 
 			if ( pConnector->GetProperties().content_type )
 				pConnector->GetProperties().content_type->SetPendingValue( drm->req, 0, bForceInRequest );
+
+			if ( pConnector->GetProperties().Broadcast_RGB )
+				pConnector->GetProperties().Broadcast_RGB->SetPendingValue( drm->req, 0, bForceInRequest );
 		}
 
 		for ( std::unique_ptr< gamescope::CDRMCRTC > &pCRTC : drm->crtcs )
@@ -2831,7 +2892,7 @@ int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameI
 				pCRTC->GetProperties().AMD_CRTC_REGAMMA_TF->SetPendingValue( drm->req, 0, bForceInRequest );
 		}
 
-		if ( drm->pConnector )
+		if ( drm->pConnector && !bSleep )
 		{
 			// Always set our CRTC_ID for the modeset, especially
 			// as we zero-ed it above.
@@ -2841,7 +2902,7 @@ int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameI
 				drm->pConnector->GetProperties().Colorspace->SetPendingValue( drm->req, uColorimetry, bForceInRequest );
 		}
 
-		if ( drm->pCRTC )
+		if ( drm->pCRTC && !bSleep )
 		{
 			drm->pCRTC->GetProperties().ACTIVE->SetPendingValue( drm->req, 1u, true );
 			drm->pCRTC->GetProperties().MODE_ID->SetPendingValue( drm->req, drm->pending.mode_id ? drm->pending.mode_id->GetBlobValue() : 0lu, true );
@@ -2851,16 +2912,23 @@ int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameI
 		}
 	}
 
-	if ( drm->pConnector )
+	if ( drm->pConnector && !bSleep )
 	{
 		if ( drm->pConnector->GetProperties().HDR_OUTPUT_METADATA )
 			drm->pConnector->GetProperties().HDR_OUTPUT_METADATA->SetPendingValue( drm->req, pHDRMetadata ? pHDRMetadata->GetBlobValue() : 0lu, bForceInRequest );
 
 		if ( drm->pConnector->GetProperties().content_type )
 			drm->pConnector->GetProperties().content_type->SetPendingValue( drm->req, DRM_MODE_CONTENT_TYPE_GAME, bForceInRequest );
+
+		GamescopeBroadcastRGBMode_t eBroadcastRGB = drm->pConnector->GetScreenType() == gamescope::GAMESCOPE_SCREEN_TYPE_EXTERNAL
+			? s_ExternalBroadcastRGBMode
+			: GAMESCOPE_BROADCAST_RGB_MODE_AUTOMATIC;
+
+		if ( drm->pConnector->GetProperties().Broadcast_RGB )
+			drm->pConnector->GetProperties().Broadcast_RGB->SetPendingValue( drm->req, eBroadcastRGB, bForceInRequest );
 	}
 
-	if ( drm->pCRTC )
+	if ( drm->pCRTC && !bSleep )
 	{
 		if ( drm->pCRTC->GetProperties().AMD_CRTC_REGAMMA_TF )
 		{
@@ -2874,7 +2942,7 @@ int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameI
 	drm->flags = flags;
 
 	int ret;
-	if ( drm->pCRTC == nullptr ) {
+	if ( drm->pCRTC == nullptr || bSleep ) {
 		ret = 0;
 	} else if ( drm->bUseLiftoff ) {
 		ret = drm_prepare_liftoff( drm, frameInfo, needs_modeset );

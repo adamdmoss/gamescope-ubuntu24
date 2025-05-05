@@ -29,7 +29,7 @@
     it.
   </description>
 
-  <interface name="gamescope_control" version="3">
+  <interface name="gamescope_control" version="4">
     <request name="destroy" type="destructor"></request>
 
     <enum name="feature">
@@ -98,6 +98,22 @@
     <event name="screenshot_taken" since="3">
       <arg name="path" type="string" summary="Path to written screenshot"></arg>
     </event>
+
+    <enum name="display_type_flags" bitfield="true" since="4">
+      <entry name="internal_display" value="0x1" summary="The internal display of the device"/>
+      <entry name="external_display" value="0x2" summary="The external display attached to the device"/>
+    </enum>
+
+    <enum name="display_sleep_flags" bitfield="true" since="4">
+      <entry name="sleep" value="0x1" summary="Go to sleep... zzz... (Conflicts with wake)"/>
+      <entry name="wake" value="0x2" summary="Wake up! (Conflicts with sleep)"/>
+    </enum>
+
+    <request name="display_sleep" since="4">
+      <description summary="Attempts to make the display go to sleep/idle"></description>
+      <arg name="display_type" type="uint" enum="display_type_flags" summary="display type"></arg>
+      <arg name="flags" type="uint" enum="display_sleep_flags" summary="sleep flags"></arg>
+    </request>
 
   </interface>
 </protocol>
