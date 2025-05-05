@@ -201,6 +201,7 @@ gamescope::ConVar<bool> cv_adaptive_sync_ignore_overlay( "adaptive_sync_ignore_o
 gamescope::ConVar<int> cv_adaptive_sync_overlay_cycles( "adaptive_sync_overlay_cycles", 1, "Number of vblank cycles to ignore overlay repaints before forcing a commit with adaptive sync." );
 
 gamescope::ConVar<bool> cv_upscale_preemptive( "upscale_preemptive", true, "Allow pre-emptive upscaling" );
+gamescope::ConVar<bool> cv_upscale_preemptive_debug_force_sync( "upscale_preemptive_debug_force_sync", false, "Force synchronize pre-emptive upscaling" );
 
 uint64_t g_SteamCompMgrLimitedAppRefreshCycle = 16'666'666;
 uint64_t g_SteamCompMgrAppRefreshCycle = 16'666'666;
@@ -6525,9 +6526,21 @@ void update_wayland_res(CommitDoneList_t *doneCommits, steamcompmgr_win_t *w, Re
 				pCommandBuffer->AddDependency( reslistentry.pAcquirePoint->GetTimeline()->ToVkSemaphore(), reslistentry.pAcquirePoint->GetPoint() );
 				pCommandBuffer->AddSignal( pTempImage->pReleaseTimeline->ToVkSemaphore(), ulNextReleasePoint );
 
-				auto seqNo = vulkan_composite( &upscaledFrameInfo, nullptr, false, pTempImage->pTexture, false, std::move( pCommandBuffer ) );
+				static std::optional<uint64_t> s_ulLastPreemptiveUpscaleSeqNo;
 
-				vulkan_wait( *seqNo, true );
+				if ( s_ulLastPreemptiveUpscaleSeqNo )
+				{
+					vulkan_wait( *s_ulLastPreemptiveUpscaleSeqNo, true );
+				}
+
+				std::optional<uint64_t> seqNo = vulkan_composite( &upscaledFrameInfo, nullptr, false, pTempImage->pTexture, false, std::move( pCommandBuffer ) );
+
+				if ( cv_upscale_preemptive_debug_force_sync )
+				{
+					vulkan_wait( *seqNo, true );
+				}
+
+				s_ulLastPreemptiveUpscaleSeqNo = seqNo;
 
 				newCommit->upscaledTexture = std::optional<UpscaledTexture_t>
 				{
