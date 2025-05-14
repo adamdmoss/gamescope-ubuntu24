@@ -22,11 +22,6 @@ epoll_dep = dependency('epoll-shim', required: false)
 sdl2_dep = dependency('SDL2', required: get_option('sdl2_backend'))
 avif_dep = dependency('libavif', version: '>=1.0.0', required: get_option('avif_screenshots'))
 
-glm_proj = subproject('glm')
-glm_dep = glm_proj.get_variable('glm_dep')
-stb_proj = subproject('stb')
-stb_dep = stb_proj.get_variable('stb_dep')
-
 wlroots_dep = dependency(
   'wlroots',
   version: ['>= 0.18.0', '< 0.19.0'],

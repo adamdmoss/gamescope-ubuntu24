@@ -50,6 +50,11 @@ dep_x11 = dependency('x11')
 dep_wayland = dependency('wayland-client')
 vulkan_dep = dependency('vulkan')
 
+glm_proj = subproject('glm')
+glm_dep = glm_proj.get_variable('glm_dep')
+stb_proj = subproject('stb')
+stb_dep = stb_proj.get_variable('stb_dep')
+
 if get_option('enable_openvr_support')
   openvr_dep = dependency('openvr', version: '>= 2.7', required : false)
   if not openvr_dep.found()
