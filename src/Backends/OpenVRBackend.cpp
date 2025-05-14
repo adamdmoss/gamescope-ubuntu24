@@ -960,6 +960,9 @@ namespace gamescope
                 for ( COpenVRPlane &plane : m_Planes )
                 {
                     vr::VREvent_t vrEvent;
+                            bool bDidScrollThisFrame = false;
+                            bool bPendingTouchMove = false;
+                            float flTouchMoveX, flTouchMoveY;
                     while( vr::VROverlay()->PollNextOverlayEvent( plane.GetOverlay(), &vrEvent, sizeof( vrEvent ) ) )
                     {
                         switch( vrEvent.eventType )
@@ -989,8 +992,6 @@ namespace gamescope
                                 float flY = ( g_nOutputHeight - vrEvent.data.mouse.y ) / float( g_nOutputHeight );
 
                                 TouchClickMode eMode = GetTouchClickMode();
-                                // Always warp a cursor, even if it's invisible, so we get hover events.
-                                bool bAlwaysMoveCursor = eMode == TouchClickModes::Passthrough && cv_vr_always_warp_cursor;
 
                                 if ( eMode == TouchClickModes::Trackpad )
                                 {
@@ -1013,9 +1014,10 @@ namespace gamescope
                                 }
                                 else
                                 {
-                                    wlserver_lock();
-                                    wlserver_touchmotion( flX, flY , 0, ++m_uFakeTimestamp, bAlwaysMoveCursor );
-                                    wlserver_unlock();
+                                                // Hold the call to wlserver_touchmotion until we're sure there are no VREvent_ScrollSmooth events this frame
+                                                bPendingTouchMove = true;
+                                                flTouchMoveX = flX;
+                                                flTouchMoveY = flY;
                                 }
                                 break;
                             }
@@ -1086,6 +1088,7 @@ namespace gamescope
                                 wlserver_lock();
                                 wlserver_mousewheel( flX, flY, ++m_uFakeTimestamp );
                                 wlserver_unlock();
+                                        bDidScrollThisFrame = true;
                                 break;
                             }
 
@@ -1122,6 +1125,17 @@ namespace gamescope
                             default:
                                 break;
                         }
+                            }
+
+                            if ( bPendingTouchMove )
+                            {
+                                // Always warp a cursor, even if it's invisible, so we get hover events.
+                                // Unless a scroll happened this frame. Then, skip the cursor move because it causes the scroll to be dropped.
+                                bool bAlwaysMoveCursor = !bDidScrollThisFrame && ( GetTouchClickMode() == TouchClickModes::Passthrough ) && cv_vr_always_warp_cursor;
+
+                                wlserver_lock();
+                                wlserver_touchmotion( flTouchMoveX, flTouchMoveY , 0, ++m_uFakeTimestamp, bAlwaysMoveCursor );
+                                wlserver_unlock();
                     }
                 }
                 sleep_for_nanos( cv_vr_poll_rate );
