@@ -345,7 +345,7 @@ static void wlserver_handle_key(struct wl_listener *listener, void *data)
 		}
 	}
 	
-	wlserver_process_hotkeys( keyboard, event->state == WL_KEYBOARD_KEY_STATE_PRESSED, event->time_msec );
+	wlserver_process_hotkeys( keyboard, event->keycode, event->state == WL_KEYBOARD_KEY_STATE_PRESSED );
 
 	wlr_seat_set_keyboard( wlserver.wlr.seat, keyboard );
 	wlr_seat_keyboard_notify_key( wlserver.wlr.seat, event->time_msec, event->keycode, event->state );
