@@ -2091,6 +2091,16 @@ void wlserver_process_hotkeys( wlr_keyboard *keyboard, uint32_t key, bool press 
 	xkb_keycode_t keycode = key + 8;
 	xkb_keysym_t keysym = xkb_state_key_get_one_sym( keyboard->xkb_state, keycode );
 
+	// BUG: normalize to the same tab key.
+	// Sometimes when the keyboard comes online we'll receive key events as
+	// one of these two. We need to investigate why. For now lets just normalize
+	// to one of the two.
+	// TODO: A proper solution would probably be to have a set comparison that
+	// takes into account aliased characters, or uses a fully normalized set of
+	// chars.
+	if ( keysym == XKB_KEY_ISO_Left_Tab )
+		keysym = XKB_KEY_Tab;
+
 	static std::unordered_set<xkb_keysym_t> s_setPressedKeySyms;
 	if ( press )
 	{
