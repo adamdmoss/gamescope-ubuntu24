@@ -2572,7 +2572,7 @@ paint_all(bool async)
 			&frameInfo);
 	}
 
-	if ( !bValidContents || !GetBackend()->IsVisible() )
+	if ( !bValidContents || !GetBackend()->IsPaused() )
 	{
 		return;
 	}

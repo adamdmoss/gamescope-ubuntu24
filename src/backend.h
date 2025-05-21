@@ -234,6 +234,7 @@ namespace gamescope
             return gamescope::GAMESCOPE_SCREEN_TYPE_INTERNAL;
         }
 
+        virtual bool IsPaused() const = 0;
         virtual bool IsVisible() const = 0;
         virtual glm::uvec2 CursorSurfaceSize( glm::uvec2 uvecSize ) const = 0;
 

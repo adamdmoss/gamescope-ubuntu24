@@ -3752,9 +3752,14 @@ namespace gamescope
 			return g_bSupportsSyncObjs && !cv_drm_debug_disable_explicit_sync;
 		}
 
-		virtual bool IsVisible() const override
+		virtual bool IsPaused() const override
 		{
 			return !g_DRM.paused;
+		}
+
+		virtual bool IsVisible() const override
+		{
+			return !this->IsPaused();
 		}
 
 		virtual glm::uvec2 CursorSurfaceSize( glm::uvec2 uvecSize ) const override
