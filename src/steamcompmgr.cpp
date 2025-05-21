@@ -7712,17 +7712,19 @@ steamcompmgr_main(int argc, char **argv)
 	}
 
 	FILE *sysfs_caps = fopen("/sys/fs/cgroup/dmem.capacity", "r");
-	char *line = NULL;
-	size_t size = 0;
-	while (getline(&line, &size, sysfs_caps) >= 0) {
-		char *capacity = strstr(line, " ");
-		if (capacity)
-			++capacity;
-		else
-			continue;
-		uint64_t vramSize = strtoull(capacity, NULL, 10);
-		std::string idString = std::string(line, (capacity - 1) - line);
-		g_vramCapacities.emplace(idString, vramSize);
+	if (sysfs_caps != nullptr) {
+		char *line = NULL;
+		size_t size = 0;
+		while (getline(&line, &size, sysfs_caps) >= 0) {
+			char *capacity = strstr(line, " ");
+			if (capacity)
+				++capacity;
+			else
+				continue;
+			uint64_t vramSize = strtoull(capacity, NULL, 10);
+			std::string idString = std::string(line, (capacity - 1) - line);
+			g_vramCapacities.emplace(idString, vramSize);
+		}
 	}
 #endif
 
