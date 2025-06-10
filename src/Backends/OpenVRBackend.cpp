@@ -63,8 +63,8 @@ gamescope::ConVar<float> cv_vr_trackpad_sensitivity( "vr_trackpad_sensitivity", 
 gamescope::ConVar<uint64_t> cv_vr_trackpad_click_time( "vr_trackpad_click_time", 250'000'000ul, "Time to consider a 'click' vs a 'drag' when using trackpad mode. In nanoseconds." );
 gamescope::ConVar<float> cv_vr_trackpad_click_max_delta( "vr_trackpad_click_max_delta", 0.14f, "Max amount the cursor can move before not clicking." );
 
-// Just below half of 120Hz, so we always at least poll input once per frame, regardless of cadence/cycles.
-gamescope::ConVar<uint64_t> cv_vr_poll_rate( "vr_poll_rate", 4'000'000ul, "Time between input polls. In nanoseconds." );
+// Maximum interval between polling for VR events (normally paced by frame sync)
+gamescope::ConVar<uint32_t> cv_vr_poll_rate( "vr_poll_rate", 50ul, "Max time between input polls. In milliseconds." );
 
 // Not in public headers yet.
 namespace vr
@@ -1143,7 +1143,7 @@ namespace gamescope
                                 wlserver_unlock();
                     }
                 }
-                sleep_for_nanos( cv_vr_poll_rate );
+                vr::VROverlay()->WaitFrameSync( cv_vr_poll_rate );
             }
         }
 
