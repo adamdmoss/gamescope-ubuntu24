@@ -2111,6 +2111,12 @@ void wlserver_process_hotkeys( wlr_keyboard *keyboard, uint32_t key, bool press 
 		s_setPressedKeySyms.erase( keysym );
 	}
 
+	if ( log_binding.Enabled( LOG_DEBUG ) )
+	{
+		std::string sPressedKeySymsDebugName = ComputeDebugName( s_setPressedKeySyms );
+		log_binding.debugf( "Looking for: [%s].", sPressedKeySymsDebugName.c_str() );
+	}
+
 	{
 		using namespace gamescope::WaylandServer;
 
