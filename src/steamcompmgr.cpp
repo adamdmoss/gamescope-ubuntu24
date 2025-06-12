@@ -1918,6 +1918,7 @@ struct BaseLayerInfo_t
 	float offset[2];
 	float opacity;
 	GamescopeUpscaleFilter filter;
+	AlphaBlendingMode_t eAlphaBlendingMode = ALPHA_BLENDING_MODE_PREMULTIPLIED;
 };
 
 std::array< BaseLayerInfo_t, HELD_COMMIT_COUNT > g_CachedPlanes = {};
@@ -1947,6 +1948,7 @@ paint_cached_base_layer(const gamescope::Rc<commit_t>& commit, const BaseLayerIn
 	layer->tex = commit->vulkanTex;
 
 	layer->filter = base.filter;
+	layer->eAlphaBlendingMode = base.eAlphaBlendingMode;
 	layer->blackBorder = true;
 }
 
@@ -1958,6 +1960,7 @@ namespace PaintWindowFlag
 	static const uint32_t DrawBorders = 1u << 3;
 	static const uint32_t NoScale = 1u << 4;
 	static const uint32_t NoFilter = 1u << 5;
+	static const uint32_t CoverageMode = 1u << 6;
 }
 using PaintWindowFlags = uint32_t;
 
@@ -2152,6 +2155,8 @@ paint_window_commit( const gamescope::Rc<commit_t> &lastCommit, steamcompmgr_win
 			layer->filter = GamescopeUpscaleFilter::NEAREST;
 	}
 
+	layer->eAlphaBlendingMode = ( flags & PaintWindowFlag::CoverageMode ) ? ALPHA_BLENDING_MODE_COVERAGE : ALPHA_BLENDING_MODE_PREMULTIPLIED;
+
 	return layer;
 }
 
@@ -2196,6 +2201,7 @@ paint_window(steamcompmgr_win_t *w, steamcompmgr_win_t *scaleW, struct FrameInfo
 		basePlane.offset[1] = layer->offset.y;
 		basePlane.opacity = layer->opacity;
 		basePlane.filter = layer->filter;
+		basePlane.eAlphaBlendingMode = layer->eAlphaBlendingMode;
 
 		g_CachedPlanes[ HELD_COMMIT_BASE ] = basePlane;
 		if ( !(flags & PaintWindowFlag::FadeTarget) )
@@ -2362,6 +2368,8 @@ bool ShouldDrawCursor()
 	return g_bForceRelativeMouse || !GetBackend()->GetNestedHints();
 }
 
+gamescope::ConVar<bool> cv_overlay_unmultiplied_alpha{ "overlay_unmultiplied_alpha", false };
+
 static void
 paint_all(bool async)
 {
@@ -2519,7 +2527,8 @@ paint_all(bool async)
 	{
 		if (externalOverlay->opacity)
 		{
-			paint_window(externalOverlay, externalOverlay, &frameInfo, global_focus.cursor, PaintWindowFlag::NoScale | PaintWindowFlag::NoFilter);
+			paint_window(externalOverlay, externalOverlay, &frameInfo, global_focus.cursor, PaintWindowFlag::NoScale | PaintWindowFlag::NoFilter |
+				( cv_overlay_unmultiplied_alpha ? PaintWindowFlag::CoverageMode : 0 ) );
 
 			if ( externalOverlay == global_focus.inputFocusWindow )
 				update_touch_scaling( &frameInfo );
@@ -2528,7 +2537,8 @@ paint_all(bool async)
 
 	if (overlay && overlay->opacity)
 	{
-		paint_window(overlay, overlay, &frameInfo, global_focus.cursor, PaintWindowFlag::DrawBorders | PaintWindowFlag::NoFilter);
+		paint_window(overlay, overlay, &frameInfo, global_focus.cursor, PaintWindowFlag::DrawBorders | PaintWindowFlag::NoFilter |
+				( cv_overlay_unmultiplied_alpha ? PaintWindowFlag::CoverageMode : 0 )  );
 
 		if ( overlay == global_focus.inputFocusWindow )
 			update_touch_scaling( &frameInfo );
@@ -2552,6 +2562,7 @@ paint_all(bool async)
 			layer->opacity = 1.0f; // BLAH
 			layer->zpos = g_zposOverlay;
 			layer->applyColorMgmt = g_ColorMgmt.pending.enabled;
+				layer->eAlphaBlendingMode = ALPHA_BLENDING_MODE_COVERAGE; // misyl: Always coverage and not premult in case of a Look applied.
 
 			layer->colorspace = GAMESCOPE_APP_TEXTURE_COLORSPACE_LINEAR;
 			layer->hdr_metadata_blob = nullptr;

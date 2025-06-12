@@ -1668,6 +1668,7 @@ struct LiftoffStateCacheEntry
 		drm_color_encoding colorEncoding;
 		drm_color_range    colorRange;
 		GamescopeAppTextureColorspace colorspace;
+		AlphaBlendingMode_t eAlphaBlendingMode;
 	} layerState[ k_nMaxLayers ];
 
 	bool operator == (const LiftoffStateCacheEntry& entry) const
@@ -1696,6 +1697,7 @@ struct LiftoffStateCacheEntryKasher
 			hash_combine(hash, k.layerState[i].colorEncoding);
 			hash_combine(hash, k.layerState[i].colorRange);
 			hash_combine(hash, k.layerState[i].colorspace);
+			hash_combine(hash, k.layerState[i].eAlphaBlendingMode);
 		}
 
 		return hash;
@@ -1841,6 +1843,7 @@ LiftoffStateCacheEntry FrameInfoToLiftoffStateCacheEntry( struct drm_t *drm, con
 		{
 			entry.layerState[i].colorspace = frameInfo->layers[ i ].colorspace;
 		}
+		entry.layerState[i].eAlphaBlendingMode = frameInfo->layers[i].eAlphaBlendingMode;
 	}
 
 	return entry;
@@ -2510,6 +2513,15 @@ drm_prepare_liftoff( struct drm_t *drm, const struct FrameInfo_t *frameInfo, boo
 
 			liftoff_layer_set_property( drm->lo_layers[ i ], "zpos", entry.layerState[i].zpos );
 			liftoff_layer_set_property( drm->lo_layers[ i ], "alpha", frameInfo->layers[ i ].opacity * 0xffff);
+
+			if ( entry.layerState[i].zpos != g_zposBase )
+			{
+				liftoff_layer_set_property( drm->lo_layers[ i ], "pixel blend mode", (uint64_t) frameInfo->layers[i].eAlphaBlendingMode );
+			}
+			else
+			{
+				liftoff_layer_unset_property( drm->lo_layers[ i ], "pixel blend mode" );
+			}
 
 			liftoff_layer_set_property( drm->lo_layers[ i ], "SRC_X", 0);
 			liftoff_layer_set_property( drm->lo_layers[ i ], "SRC_Y", 0);

@@ -266,6 +266,17 @@ inline bool close_enough(float a, float b, float epsilon = 0.001f)
 
 bool DRMFormatHasAlpha( uint32_t nDRMFormat );
 
+enum AlphaBlendingMode_t
+{
+	ALPHA_BLENDING_MODE_PREMULTIPLIED,
+	ALPHA_BLENDING_MODE_COVERAGE,
+	ALPHA_BLENDING_MODE_NONE,
+};
+
+//#define DRM_MODE_BLEND_PREMULTI		0
+//#define DRM_MODE_BLEND_COVERAGE		1
+//#define DRM_MODE_BLEND_PIXEL_NONE	2
+
 struct FrameInfo_t
 {
 	bool useFSRLayer0;
@@ -296,6 +307,8 @@ struct FrameInfo_t
 
 		bool blackBorder;
 		bool applyColorMgmt; // drm only
+
+		AlphaBlendingMode_t eAlphaBlendingMode = ALPHA_BLENDING_MODE_PREMULTIPLIED;
 
 		std::shared_ptr<gamescope::BackendBlob> ctm;
 		std::shared_ptr<gamescope::BackendBlob> hdr_metadata_blob;
