@@ -862,10 +862,12 @@ protected:
 	std::unordered_map<PipelineInfo_t, VkPipeline> m_pipelineMap;
 	std::mutex m_pipelineMutex;
 
+	static constexpr uint32_t k_uMaxConcurrentSubmits = 8;
+
 	// currently just one set, no need to double buffer because we
 	// vkQueueWaitIdle after each submit.
 	// should be moved to the output if we are going to support multiple outputs
-	std::array<VkDescriptorSet, 3> m_descriptorSets;
+	std::array<VkDescriptorSet, k_uMaxConcurrentSubmits * 3> m_descriptorSets;
 	uint32_t m_currentDescriptorSet = 0;
 
 	VkBuffer m_uploadBuffer;
