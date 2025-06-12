@@ -1980,9 +1980,12 @@ paint_window_commit( const gamescope::Rc<commit_t> &lastCommit, steamcompmgr_win
 
 {
 	uint32_t sourceWidth, sourceHeight;
+	uint32_t baseWidth, baseHeight;
 	int drawXOffset = 0, drawYOffset = 0;
 	float currentScaleRatio_x = 1.0;
 	float currentScaleRatio_y = 1.0;
+	float baseScaleRatio_x = 1.0;
+	float baseScaleRatio_y = 1.0;
 
 	// Exit out if we have no window or
 	// no commit.
@@ -2037,9 +2040,15 @@ paint_window_commit( const gamescope::Rc<commit_t> &lastCommit, steamcompmgr_win
 		if (w == scaleW) {
 			sourceWidth = layer->tex->width();
 			sourceHeight = layer->tex->height();
+
+			baseWidth = lastCommit->vulkanTex->width();
+			baseHeight = lastCommit->vulkanTex->height();
 		} else {
 			sourceWidth = scaleW->GetGeometry().nWidth;
 			sourceHeight = scaleW->GetGeometry().nHeight;
+
+			baseWidth = sourceWidth;
+			baseHeight = sourceHeight;
 		}
 
 		if ( fit )
@@ -2047,6 +2056,9 @@ paint_window_commit( const gamescope::Rc<commit_t> &lastCommit, steamcompmgr_win
 			// If we have an override window, try to fit it in as long as it won't make our scale go below 1.0.
 			sourceWidth = std::max<uint32_t>( sourceWidth, clamp<int>( fit->GetGeometry().nX + fit->GetGeometry().nWidth, 0, currentOutputWidth ) );
 			sourceHeight = std::max<uint32_t>( sourceHeight, clamp<int>( fit->GetGeometry().nY + fit->GetGeometry().nHeight, 0, currentOutputHeight ) );
+
+			baseWidth = std::max<uint32_t>( baseWidth, clamp<int>( fit->GetGeometry().nX + fit->GetGeometry().nWidth, 0, currentOutputWidth ) );
+			baseHeight = std::max<uint32_t>( baseHeight, clamp<int>( fit->GetGeometry().nY + fit->GetGeometry().nHeight, 0, currentOutputHeight ) );
 		}
 	}
 
@@ -2065,10 +2077,11 @@ paint_window_commit( const gamescope::Rc<commit_t> &lastCommit, steamcompmgr_win
 			drawYOffset += w->GetGeometry().nY * currentScaleRatio_y;
 		}
 
+		calc_scale_factor(baseScaleRatio_x, baseScaleRatio_y, baseWidth, baseHeight);
 		if ( zoomScaleRatio != 1.0 )
 		{
-			drawXOffset += (((int)sourceWidth / 2) - (cursor ? cursor->x() : 0)) * currentScaleRatio_x;
-			drawYOffset += (((int)sourceHeight / 2) - (cursor ? cursor->y() : 0)) * currentScaleRatio_y;
+			drawXOffset += (((int)baseWidth / 2) - (cursor ? cursor->x() : 0)) * baseScaleRatio_x;
+			drawYOffset += (((int)baseHeight / 2) - (cursor ? cursor->y() : 0)) * baseScaleRatio_y;
 		}
 	}
 
@@ -6607,9 +6620,18 @@ void update_wayland_res(CommitDoneList_t *doneCommits, steamcompmgr_win_t *w, Re
 				? EOTF_Gamma22
 				: EOTF_PQ;
 
+			float flOldGlobalScale = globalScaleRatio;
+			float flOldZoomScale = zoomScaleRatio;
+			float flOldOverscanScale = overscanScaleRatio;
+			overscanScaleRatio = 1.0f;
+			zoomScaleRatio = 1.0f;
+			globalScaleRatio = 1.0f;
 			paint_window_commit( newCommit, w, w, &upscaledFrameInfo, nullptr );
 			upscaledFrameInfo.useFSRLayer0 = g_upscaleFilter == GamescopeUpscaleFilter::FSR;
 			upscaledFrameInfo.useNISLayer0 = g_upscaleFilter == GamescopeUpscaleFilter::NIS;
+			globalScaleRatio = flOldGlobalScale;
+			zoomScaleRatio = flOldZoomScale;
+			flOldOverscanScale = flOldOverscanScale;
 
 			TempUpscaleImage_t *pTempImage = GetTempUpscaleImage( g_nOutputWidth, g_nOutputHeight, g_output.uOutputFormat );
 			if ( pTempImage )
