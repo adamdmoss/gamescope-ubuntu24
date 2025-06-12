@@ -792,7 +792,7 @@ public:
 	inline dev_t primaryDevId() {return m_drmPrimaryDevId;}
 	inline bool supportsFp16() {return m_bSupportsFp16;}
 
-	inline void *uploadBufferData(uint32_t size)
+	inline std::pair<void *, uint32_t> uploadBufferData(uint32_t size)
 	{
 		assert(size <= upload_buffer_size);
 
@@ -803,9 +803,11 @@ public:
 			waitIdle(false);
 		}
 
-		uint8_t *ptr = ((uint8_t*)m_uploadBufferData) + m_uploadBufferOffset;
+		uint32_t uOffset = m_uploadBufferOffset;
+
+		uint8_t *ptr = ((uint8_t*)m_uploadBufferData) + uOffset;
 		m_uploadBufferOffset += size;
-		return ptr;
+		return std::make_pair( ptr, uOffset );
 	}
 
 	#define VK_FUNC(x) PFN_vk##x x = nullptr;
