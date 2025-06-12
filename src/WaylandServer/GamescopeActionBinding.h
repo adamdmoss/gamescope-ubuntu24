@@ -9,6 +9,7 @@
 #include <string>
 #include <span>
 #include <string>
+#include <array>
 #include <unordered_set>
 
 #include "convar.h"
@@ -25,7 +26,7 @@ uint64_t get_time_in_nanos();
 
 inline LogScope log_binding( "binding" );
 
-static std::string ComputeDebugName( const std::unordered_set<xkb_keysym_t> &syms )
+static inline std::string ComputeDebugName( const std::unordered_set<xkb_keysym_t> &syms )
 {
     std::string sTriggerDebugName;
     bool bFirst = true;
@@ -48,6 +49,35 @@ static std::string ComputeDebugName( const std::unordered_set<xkb_keysym_t> &sym
     }
 
     return sTriggerDebugName;
+}
+
+static constexpr std::pair<xkb_keysym_t, xkb_keysym_t> k_mapKeysymRemapping[]
+{
+	// BUG: normalize to the same tab key.
+	// Sometimes when the keyboard comes online we'll receive key events as
+	// one of these two. We need to investigate why. For now lets just normalize
+	// to one of the two.
+	// TODO: A proper solution would probably be to have a set comparison that
+	// takes into account aliased characters, or uses a fully normalized set of
+	// chars.
+    { XKB_KEY_ISO_Left_Tab, XKB_KEY_Tab },
+    { XKB_KEY_ISO_Enter, XKB_KEY_Return },
+    { XKB_KEY_Meta_L, XKB_KEY_Super_L },
+    { XKB_KEY_Meta_R, XKB_KEY_Super_R },
+    { XKB_KEY_ISO_Level3_Shift, XKB_KEY_Alt_R },
+};
+
+static inline xkb_keysym_t NormalizeKeysymForHotkey( xkb_keysym_t uKeySym )
+{
+    uKeySym = xkb_keysym_to_upper( uKeySym );
+
+    for ( auto [ uBadKey, uGoodKey ] : k_mapKeysymRemapping )
+    {
+        if ( uKeySym == uBadKey )
+            uKeySym = uGoodKey;
+    }
+
+    return uKeySym;
 }
 
 namespace gamescope::WaylandServer
@@ -96,7 +126,7 @@ namespace gamescope::WaylandServer
             std::unordered_set<xkb_keysym_t> setKeySyms;
             for ( xkb_keysym_t uKeySym : pKeysyms )
             {
-                setKeySyms.emplace( uKeySym );
+                setKeySyms.emplace( NormalizeKeysymForHotkey( uKeySym ) );
             }
 
             std::string sTriggerDebugName = ComputeDebugName( setKeySyms );
