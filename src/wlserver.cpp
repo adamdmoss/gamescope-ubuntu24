@@ -124,7 +124,7 @@ static void wlserver_update_cursor_constraint();
 static void handle_pointer_constraint(struct wl_listener *listener, void *data);
 static void wlserver_constrain_cursor( struct wlr_pointer_constraint_v1 *pNewConstraint );
 struct wlr_surface *wlserver_surface_to_main_surface( struct wlr_surface *pSurface );
-void wlserver_process_hotkeys( wlr_keyboard *keyboard, uint32_t key, bool press );
+bool wlserver_process_hotkeys( wlr_keyboard *keyboard, uint32_t key, bool press );
 
 std::vector<ResListEntry_t>& gamescope_xwayland_server_t::retrieve_commits()
 {
@@ -345,10 +345,11 @@ static void wlserver_handle_key(struct wl_listener *listener, void *data)
 		}
 	}
 	
-	wlserver_process_hotkeys( keyboard, event->keycode, event->state == WL_KEYBOARD_KEY_STATE_PRESSED );
-
-	wlr_seat_set_keyboard( wlserver.wlr.seat, keyboard );
-	wlr_seat_keyboard_notify_key( wlserver.wlr.seat, event->time_msec, event->keycode, event->state );
+	if ( !wlserver_process_hotkeys( keyboard, event->keycode, event->state == WL_KEYBOARD_KEY_STATE_PRESSED ) )
+	{
+		wlr_seat_set_keyboard( wlserver.wlr.seat, keyboard );
+		wlr_seat_keyboard_notify_key( wlserver.wlr.seat, event->time_msec, event->keycode, event->state );
+	}
 
 	bump_input_counter();
 }
@@ -2086,7 +2087,7 @@ void wlserver_keyboardfocus( struct wlr_surface *surface, bool bConstrain )
 	}
 }
 
-void wlserver_process_hotkeys( wlr_keyboard *keyboard, uint32_t key, bool press )
+bool wlserver_process_hotkeys( wlr_keyboard *keyboard, uint32_t key, bool press )
 {
 	xkb_keycode_t keycode = key + 8;
 	xkb_keysym_t keysym = xkb_state_key_get_one_sym( keyboard->xkb_state, keycode );
@@ -2137,10 +2138,12 @@ void wlserver_process_hotkeys( wlr_keyboard *keyboard, uint32_t key, bool press 
 					continue;
 
 				if ( pBinding->Execute() )
-					return;
+					return true;
 			}
 		}
 	}
+
+	return false;
 }
 
 void wlserver_key( uint32_t key, bool press, uint32_t time )
@@ -2149,11 +2152,12 @@ void wlserver_key( uint32_t key, bool press, uint32_t time )
 
 	wlr_keyboard *keyboard = wlserver.wlr.virtual_keyboard_device;
 
-	wlserver_process_hotkeys( keyboard, key, press );
-
-	assert( keyboard != nullptr );
-	wlr_seat_set_keyboard( wlserver.wlr.seat, keyboard );
-	wlr_seat_keyboard_notify_key( wlserver.wlr.seat, time, key, press );
+	if ( !wlserver_process_hotkeys( keyboard, key, press ) )
+	{
+		assert( keyboard != nullptr );
+		wlr_seat_set_keyboard( wlserver.wlr.seat, keyboard );
+		wlr_seat_keyboard_notify_key( wlserver.wlr.seat, time, key, press );
+	}
 
 	bump_input_counter();
 }
