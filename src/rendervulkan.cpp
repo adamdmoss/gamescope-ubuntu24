@@ -3592,6 +3592,7 @@ struct BlitPushData_t
 	uint32_t blurRadius;
 
 	uint32_t u_shaderFilter;
+	uint32_t u_alphaMode;
 
     float u_linearToNits; // unset
     float u_nitsToLinear; // unset
@@ -3601,6 +3602,7 @@ struct BlitPushData_t
 	explicit BlitPushData_t(const struct FrameInfo_t *frameInfo)
 	{
 		u_shaderFilter = 0;
+		u_alphaMode = 0;
 
 		for (int i = 0; i < frameInfo->layerCount; i++) {
 			const FrameInfo_t::Layer_t *layer = &frameInfo->layers[i];
@@ -3611,6 +3613,8 @@ struct BlitPushData_t
                 u_shaderFilter |= ((uint32_t)GamescopeUpscaleFilter::FROM_VIEW) << (i * 4);
             else
                 u_shaderFilter |= ((uint32_t)layer->filter) << (i * 4);
+
+			u_alphaMode |= ((uint32_t)layer->eAlphaBlendingMode) << ( i * 4 );
 
 			if (layer->ctm)
 			{
@@ -3642,6 +3646,7 @@ struct BlitPushData_t
 		offset[0] = { 0.5f, 0.5f };
 		opacity[0] = 1.0f;
         u_shaderFilter = (uint32_t)GamescopeUpscaleFilter::LINEAR;
+		u_alphaMode = 0;
 		ctm[0] = glm::mat3x4
 		{
 			1, 0, 0, 0,
@@ -3721,6 +3726,7 @@ struct RcasPushData_t
 	uint32_t u_c1;
 
 	uint32_t u_shaderFilter;
+	uint32_t u_alphaMode;
 
     float u_linearToNits; // unset
     float u_nitsToLinear; // unset
@@ -3737,6 +3743,7 @@ struct RcasPushData_t
 		u_frameId = s_frameId++;
 		u_c1 = tmp.x;
 		u_shaderFilter = 0;
+		u_alphaMode = 0;
 
 		for (int i = 0; i < frameInfo->layerCount; i++)
 		{
@@ -3746,6 +3753,8 @@ struct RcasPushData_t
                 u_shaderFilter |= ((uint32_t)GamescopeUpscaleFilter::FROM_VIEW) << (i * 4);
             else
                 u_shaderFilter |= ((uint32_t)layer->filter) << (i * 4);
+
+			u_alphaMode |= ((uint32_t)layer->eAlphaBlendingMode) << ( i * 4 );
 
 			if (layer->ctm)
 			{
