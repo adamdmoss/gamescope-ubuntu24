@@ -128,6 +128,8 @@ static const int g_nBaseCursorScale = 36;
 LogScope xwm_log("xwm");
 LogScope g_WaitableLog("waitable");
 
+gamescope::ConVar<bool> cv_overlay_unmultiplied_alpha{ "overlay_unmultiplied_alpha", false };
+
 bool g_bWasPartialComposite = false;
 
 bool ShouldDrawCursor();
@@ -1890,6 +1892,8 @@ void MouseCursor::paint(steamcompmgr_win_t *window, steamcompmgr_win_t *fit, str
 	layer->ctm = nullptr;
 	layer->hdr_metadata_blob = nullptr;
 	layer->colorspace = GAMESCOPE_APP_TEXTURE_COLORSPACE_SRGB;
+
+	layer->eAlphaBlendingMode = cv_overlay_unmultiplied_alpha ? ALPHA_BLENDING_MODE_COVERAGE : ALPHA_BLENDING_MODE_PREMULTIPLIED;
 }
 
 void MouseCursor::updateCursorFeedback( bool bForce )
@@ -2368,7 +2372,6 @@ bool ShouldDrawCursor()
 	return g_bForceRelativeMouse || !GetBackend()->GetNestedHints();
 }
 
-gamescope::ConVar<bool> cv_overlay_unmultiplied_alpha{ "overlay_unmultiplied_alpha", false };
 
 static void
 paint_all(bool async)
