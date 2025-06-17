@@ -29,7 +29,7 @@
     it.
   </description>
 
-  <interface name="gamescope_control" version="4">
+  <interface name="gamescope_control" version="5">
     <request name="destroy" type="destructor"></request>
 
     <enum name="feature">
@@ -42,6 +42,7 @@
       <entry name="pixel_filter" value="3"/>
       <entry name="refresh_cycle_only_change_refresh_rate" value="4"/>
       <entry name="mura_correction" value="5"/>
+      <entry name="look" value="6"/>
     </enum>
 
     <event name="feature_support">
@@ -113,6 +114,21 @@
       <description summary="Attempts to make the display go to sleep/idle"></description>
       <arg name="display_type" type="uint" enum="display_type_flags" summary="display type"></arg>
       <arg name="flags" type="uint" enum="display_sleep_flags" summary="sleep flags"></arg>
+    </request>
+
+    <enum name="look_flags" bitfield="true" since="5">
+      <entry name="layer_composition_unpremultiplied" value="0x1" summary="Signifies that the input layers should be assumed to be unpremultiplied alphas, instead of traditional premultiplied values. This is useful when looks that dramatically move the black-point are enabled (such as 'invert'), as it preserves transparent regions."/>
+    </enum>
+
+    <request name="set_look" since="5">
+      <description summary="Sets a look for the screen based on a 3D LUT."></description>
+      <arg name="lut3d_g22" type="fd" summary="file-descriptor containing the data for the look for Gamma 2.2. Expects .cube format"></arg>
+      <arg name="lut3d_pq" type="fd" summary="file-descriptor containing the data for the look for PQ. Expects .cube format"></arg>
+      <arg name="flags" type="uint" enum="look_flags" summary="look flags"></arg>
+    </request>
+
+    <request name="unset_look" since="5">
+      <description summary="Unsets the current look."></description>
     </request>
 
   </interface>

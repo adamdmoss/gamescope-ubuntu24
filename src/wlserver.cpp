@@ -72,6 +72,7 @@
 #include "hdmi.h"
 #include "main.hpp"
 #include "steamcompmgr.hpp"
+#include "color_helpers.h"
 #include "log.hpp"
 #include "ime.hpp"
 #include "xwayland_ctx.hpp"
@@ -1071,6 +1072,98 @@ static void gamescope_control_display_sleep( struct wl_client *client, struct wl
 	}
 }
 
+extern gamescope::ConVar<bool> cv_overlay_unmultiplied_alpha;
+extern std::atomic<std::shared_ptr<lut3d_t>> g_ColorMgmtLooks[EOTF_Count];
+
+static gamescope::ConCommand cc_set_look("set_look", "Set a look for a specific EOTF. Eg. set_look mylook.cube (g22 only), set_look pq mylook.cube, set_look mylook_g22.cube mylook_pq.cube",
+[]( std::span<std::string_view> args )
+{
+	if ( args.size() == 2 )
+	{
+		std::string arg1 = std::string{ args[1] };
+		g_ColorMgmtLooks[ EOTF_Gamma22 ] = LoadCubeLut( arg1.c_str() );
+		g_ColorMgmt.pending.externalDirtyCtr++;
+	}
+	else if ( args.size() == 3 )
+	{
+		std::string arg2 = std::string{ args[2] };
+
+		if ( args[1] == "g22" || args[1] == "G22")
+		{
+			g_ColorMgmtLooks[ EOTF_Gamma22 ] = LoadCubeLut( arg2.c_str() );
+		}
+		else if ( args[1] == "pq" || args[1] == "PQ" )
+		{
+			g_ColorMgmtLooks[ EOTF_PQ ] = LoadCubeLut( arg2.c_str() );
+		}
+		else
+		{
+			std::string arg1 = std::string{ args[1] };
+
+			std::shared_ptr<lut3d_t> pG22LUT;
+			std::shared_ptr<lut3d_t> pPQLUT;
+
+			pG22LUT = LoadCubeLut( arg1.c_str() );
+			pPQLUT = LoadCubeLut( arg2.c_str() );
+
+			g_ColorMgmtLooks[ EOTF_Gamma22 ] = pG22LUT;
+			g_ColorMgmtLooks[ EOTF_PQ ] = pPQLUT;
+		}
+		g_ColorMgmt.pending.externalDirtyCtr++;
+	}
+	else
+	{
+		g_ColorMgmtLooks[ EOTF_Gamma22 ] = nullptr;
+		g_ColorMgmtLooks[ EOTF_PQ ] = nullptr;
+		g_ColorMgmt.pending.externalDirtyCtr++;
+	}
+});
+
+static void gamescope_control_set_look( struct wl_client *client, struct wl_resource *resource, int g22_fd, int pq_fd, uint32_t flags )
+{
+	std::shared_ptr<lut3d_t> pG22LUT;
+	std::shared_ptr<lut3d_t> pPQLUT;
+
+	if ( g22_fd >= 0 )
+	{
+		// takes ownership of FD.
+		FILE *pG22 = fdopen( g22_fd, "r" );
+		pG22LUT = LoadCubeLut( pG22 );
+		fclose( pG22 );
+		g22_fd = -1;
+	}
+
+	if ( pq_fd >= 0 )
+	{
+		// takes ownership of FD.
+		FILE *pPQ = fdopen( g22_fd, "r" );
+		pPQLUT = LoadCubeLut( pPQ );
+		fclose( pPQ );
+		pq_fd = -1;
+	}
+
+	if ( !pG22LUT && !pPQLUT )
+	{
+		cv_overlay_unmultiplied_alpha = false;
+		g_ColorMgmtLooks[ EOTF_Gamma22 ] = nullptr;
+		g_ColorMgmtLooks[ EOTF_PQ ] = nullptr;
+		g_ColorMgmt.pending.externalDirtyCtr++;
+	}
+
+	cv_overlay_unmultiplied_alpha = !!( flags & GAMESCOPE_CONTROL_LOOK_FLAGS_LAYER_COMPOSITION_UNPREMULTIPLIED );
+	g_ColorMgmtLooks[ EOTF_Gamma22 ] = pG22LUT;
+	g_ColorMgmtLooks[ EOTF_PQ ] = pPQLUT;
+	g_ColorMgmt.pending.externalDirtyCtr++;
+}
+
+static void gamescope_control_unset_look( struct wl_client *client, struct wl_resource *resource )
+{
+	cv_overlay_unmultiplied_alpha = false;
+	g_ColorMgmtLooks[ EOTF_Gamma22 ] = nullptr;
+	g_ColorMgmtLooks[ EOTF_PQ ] = nullptr;
+	g_ColorMgmt.pending.externalDirtyCtr++;
+}
+
 static void gamescope_control_handle_destroy( struct wl_client *client, struct wl_resource *resource )
 {
 	wl_resource_destroy( resource );
@@ -1081,6 +1174,8 @@ static const struct gamescope_control_interface gamescope_control_impl = {
 	.set_app_target_refresh_cycle = gamescope_control_set_app_target_refresh_cycle,
 	.take_screenshot = gamescope_control_take_screenshot,
 	.display_sleep = gamescope_control_display_sleep,
+	.set_look = gamescope_control_set_look,
+	.unset_look = gamescope_control_unset_look,
 };
 
 static uint32_t get_conn_display_info_flags()
@@ -1145,6 +1240,7 @@ static void gamescope_control_bind( struct wl_client *client, void *data, uint32
 	gamescope_control_send_feature_support( resource, GAMESCOPE_CONTROL_FEATURE_PIXEL_FILTER, 1, 0 );
 	gamescope_control_send_feature_support( resource, GAMESCOPE_CONTROL_FEATURE_REFRESH_CYCLE_ONLY_CHANGE_REFRESH_RATE, 1, 0 );
 	gamescope_control_send_feature_support( resource, GAMESCOPE_CONTROL_FEATURE_MURA_CORRECTION, 1, 0 );
+	gamescope_control_send_feature_support( resource, GAMESCOPE_CONTROL_FEATURE_LOOK, 1, 0 );
 	gamescope_control_send_feature_support( resource, GAMESCOPE_CONTROL_FEATURE_DONE, 0, 0 );
 
 	wlserver_send_gamescope_control( resource );
@@ -1154,7 +1250,7 @@ static void gamescope_control_bind( struct wl_client *client, void *data, uint32
 
 static void create_gamescope_control( void )
 {
-	uint32_t version = 4;
+	uint32_t version = 5;
 	wl_global_create( wlserver.display, &gamescope_control_interface, version, NULL, gamescope_control_bind );
 }
 

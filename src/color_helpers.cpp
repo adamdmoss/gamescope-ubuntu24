@@ -4,8 +4,6 @@
 #include <algorithm>
 #include <cstdint>
 #include <cmath>
-#include <fstream>
-#include <string>
 
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
@@ -129,7 +127,7 @@ colormapping_t lerp( const colormapping_t & a, const colormapping_t & b, float t
     return result;
 }
 
-bool LoadCubeLut( lut3d_t * lut3d, const char * filename )
+std::shared_ptr<lut3d_t> LoadCubeLut( FILE *pFile )
 {
     // R changes fastest
     // ...
@@ -137,29 +135,24 @@ bool LoadCubeLut( lut3d_t * lut3d, const char * filename )
     // %f %f %f
     // ...
 
-    lut3d->lutEdgeSize = 0;
-    lut3d->data.clear();
+    std::shared_ptr<lut3d_t> lut3d = std::make_shared<lut3d_t>();
 
-    std::ifstream lutfile( filename );
-    if ( !lutfile.is_open() || lutfile.bad() )
-        return false;
-
-    std::string line;
-    while ( std::getline( lutfile, line ) )
+    char line[2048];
+    while ( fgets( line, sizeof( line ), pFile ) )
     {
         if ( lut3d->lutEdgeSize )
         {
             glm::vec3 val;
-            if ( sscanf( line.c_str(), "%f %f %f", &val.r, &val.g, &val.b ) == 3 )
+            if ( sscanf( line, "%f %f %f", &val.r, &val.g, &val.b ) == 3 )
             {
                 lut3d->data.push_back( val );
             }
         }
-        else if ( sscanf( line.c_str(), "LUT_3D_SIZE %d", &lut3d->lutEdgeSize ) == 1 )
+        else if ( sscanf( line, "LUT_3D_SIZE %d", &lut3d->lutEdgeSize ) == 1 )
         {
             if ( lut3d->lutEdgeSize < 2 || lut3d->lutEdgeSize > 128 ) // sanity check
             {
-                return false;
+                return nullptr;
             }
             lut3d->data.reserve( lut3d->lutEdgeSize * lut3d->lutEdgeSize * lut3d->lutEdgeSize );
         }
@@ -169,11 +162,19 @@ bool LoadCubeLut( lut3d_t * lut3d, const char * filename )
     bool bValid = ( nExpectedElements > 0 && ( nExpectedElements == (int) lut3d->data.size() ) );
     if ( !bValid )
     {
-        lut3d->lutEdgeSize = 0;
-        lut3d->data.clear();
+        return nullptr;
     }
 
-    return bValid;
+    return lut3d;
+}
+
+std::shared_ptr<lut3d_t> LoadCubeLut( const char *pchFileName )
+{
+    FILE *pFile = fopen( pchFileName, "r" );
+    if ( !pFile )
+        return nullptr;
+
+    return LoadCubeLut( pFile );
 }
 
 int GetLut3DIndexRedFastRGB(int indexR, int indexG, int indexB, int dim)

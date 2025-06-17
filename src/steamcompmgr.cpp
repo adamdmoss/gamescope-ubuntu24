@@ -141,7 +141,7 @@ bool ShouldDrawCursor();
 gamescope_color_mgmt_tracker_t g_ColorMgmt{};
 
 static gamescope_color_mgmt_luts g_ColorMgmtLutsOverride[ EOTF_Count ];
-static lut3d_t g_ColorMgmtLooks[ EOTF_Count ];
+std::atomic<std::shared_ptr<lut3d_t>> g_ColorMgmtLooks[EOTF_Count];
 
 
 gamescope_color_mgmt_luts g_ColorMgmtLuts[ EOTF_Count ];
@@ -339,7 +339,8 @@ create_color_mgmt_luts(const gamescope_color_mgmt_t& newColorMgmt, gamescope_col
 
 			EOTF inputEOTF = static_cast<EOTF>( nInputEOTF );
 			float flGain = 1.f;
-			lut3d_t * pLook = g_ColorMgmtLooks[nInputEOTF].lutEdgeSize > 0 ? &g_ColorMgmtLooks[nInputEOTF] : nullptr;
+			std::shared_ptr<lut3d_t> pSharedLook = g_ColorMgmtLooks[ nInputEOTF ];
+			lut3d_t * pLook = pSharedLook && pSharedLook->lutEdgeSize > 0 ? pSharedLook.get() : nullptr;
 
 			if ( inputEOTF == EOTF_Gamma22 )
 			{
@@ -759,14 +760,14 @@ bool set_color_shaperlut_override(const char *path)
 
 bool set_color_look_pq(const char *path)
 {
-	LoadCubeLut( &g_ColorMgmtLooks[EOTF_PQ], path );
+	g_ColorMgmtLooks[EOTF_PQ] = LoadCubeLut( path );
 	g_ColorMgmt.pending.externalDirtyCtr++;
 	return true;
 }
 
 bool set_color_look_g22(const char *path)
 {
-	LoadCubeLut( &g_ColorMgmtLooks[EOTF_Gamma22], path );
+	g_ColorMgmtLooks[EOTF_Gamma22] = LoadCubeLut( path );
 	g_ColorMgmt.pending.externalDirtyCtr++;
 	return true;
 }
