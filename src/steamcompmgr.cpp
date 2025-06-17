@@ -760,14 +760,18 @@ bool set_color_shaperlut_override(const char *path)
 
 bool set_color_look_pq(const char *path)
 {
-	g_ColorMgmtLooks[EOTF_PQ] = LoadCubeLut( path );
+	bool bRaisesBlackLevelFloor = false;
+	g_ColorMgmtLooks[EOTF_PQ] = LoadCubeLut( path, bRaisesBlackLevelFloor );
+	cv_overlay_unmultiplied_alpha = bRaisesBlackLevelFloor;
 	g_ColorMgmt.pending.externalDirtyCtr++;
 	return true;
 }
 
 bool set_color_look_g22(const char *path)
 {
-	g_ColorMgmtLooks[EOTF_Gamma22] = LoadCubeLut( path );
+	bool bRaisesBlackLevelFloor = false;
+	g_ColorMgmtLooks[EOTF_Gamma22] = LoadCubeLut( path, bRaisesBlackLevelFloor );
+	cv_overlay_unmultiplied_alpha = bRaisesBlackLevelFloor;
 	g_ColorMgmt.pending.externalDirtyCtr++;
 	return true;
 }

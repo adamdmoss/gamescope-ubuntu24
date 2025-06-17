@@ -353,8 +353,8 @@ struct lut3d_t
 	}
 };
 
-std::shared_ptr<lut3d_t> LoadCubeLut( FILE *pFile );
-std::shared_ptr<lut3d_t> LoadCubeLut( const char *pchFileName );
+std::shared_ptr<lut3d_t> LoadCubeLut( FILE *pFile, bool &bRaisesBlackLevelFloor );
+std::shared_ptr<lut3d_t> LoadCubeLut( const char *pchFileName, bool &bRaisesBlackLevelFloor );
 
 // Generate a color transform from the source colorspace, to the dest colorspace,
 // nLutSize1d is the number of color entries in the shaper lut

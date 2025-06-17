@@ -1081,20 +1081,23 @@ static gamescope::ConCommand cc_set_look("set_look", "Set a look for a specific 
 	if ( args.size() == 2 )
 	{
 		std::string arg1 = std::string{ args[1] };
-		g_ColorMgmtLooks[ EOTF_Gamma22 ] = LoadCubeLut( arg1.c_str() );
+		bool bRaisesBlackLevelFloor = false;
+		g_ColorMgmtLooks[ EOTF_Gamma22 ] = LoadCubeLut( arg1.c_str(), bRaisesBlackLevelFloor );
+		cv_overlay_unmultiplied_alpha = bRaisesBlackLevelFloor;
 		g_ColorMgmt.pending.externalDirtyCtr++;
 	}
 	else if ( args.size() == 3 )
 	{
 		std::string arg2 = std::string{ args[2] };
 
+		bool bRaisesBlackLevelFloor = false;
 		if ( args[1] == "g22" || args[1] == "G22")
 		{
-			g_ColorMgmtLooks[ EOTF_Gamma22 ] = LoadCubeLut( arg2.c_str() );
+			g_ColorMgmtLooks[ EOTF_Gamma22 ] = LoadCubeLut( arg2.c_str(), bRaisesBlackLevelFloor );
 		}
 		else if ( args[1] == "pq" || args[1] == "PQ" )
 		{
-			g_ColorMgmtLooks[ EOTF_PQ ] = LoadCubeLut( arg2.c_str() );
+			g_ColorMgmtLooks[ EOTF_PQ ] = LoadCubeLut( arg2.c_str(), bRaisesBlackLevelFloor );
 		}
 		else
 		{
@@ -1103,16 +1106,19 @@ static gamescope::ConCommand cc_set_look("set_look", "Set a look for a specific 
 			std::shared_ptr<lut3d_t> pG22LUT;
 			std::shared_ptr<lut3d_t> pPQLUT;
 
-			pG22LUT = LoadCubeLut( arg1.c_str() );
-			pPQLUT = LoadCubeLut( arg2.c_str() );
+			bool bDummy = false;
+			pG22LUT = LoadCubeLut( arg1.c_str(), bRaisesBlackLevelFloor );
+			pPQLUT = LoadCubeLut( arg2.c_str(), bDummy );
 
 			g_ColorMgmtLooks[ EOTF_Gamma22 ] = pG22LUT;
 			g_ColorMgmtLooks[ EOTF_PQ ] = pPQLUT;
 		}
+		cv_overlay_unmultiplied_alpha = bRaisesBlackLevelFloor;
 		g_ColorMgmt.pending.externalDirtyCtr++;
 	}
 	else
 	{
+		cv_overlay_unmultiplied_alpha = false;
 		g_ColorMgmtLooks[ EOTF_Gamma22 ] = nullptr;
 		g_ColorMgmtLooks[ EOTF_PQ ] = nullptr;
 		g_ColorMgmt.pending.externalDirtyCtr++;
@@ -1123,12 +1129,13 @@ static void gamescope_control_set_look( struct wl_client *client, struct wl_reso
 {
 	std::shared_ptr<lut3d_t> pG22LUT;
 	std::shared_ptr<lut3d_t> pPQLUT;
+	bool bRaisesBlackLevelFloor = false;
 
 	if ( g22_fd >= 0 )
 	{
 		// takes ownership of FD.
 		FILE *pG22 = fdopen( g22_fd, "r" );
-		pG22LUT = LoadCubeLut( pG22 );
+		pG22LUT = LoadCubeLut( pG22, bRaisesBlackLevelFloor );
 		fclose( pG22 );
 		g22_fd = -1;
 	}
@@ -1137,7 +1144,8 @@ static void gamescope_control_set_look( struct wl_client *client, struct wl_reso
 	{
 		// takes ownership of FD.
 		FILE *pPQ = fdopen( g22_fd, "r" );
-		pPQLUT = LoadCubeLut( pPQ );
+		bool bDummy = false;
+		pPQLUT = LoadCubeLut( pPQ, bDummy );
 		fclose( pPQ );
 		pq_fd = -1;
 	}
@@ -1150,7 +1158,7 @@ static void gamescope_control_set_look( struct wl_client *client, struct wl_reso
 		g_ColorMgmt.pending.externalDirtyCtr++;
 	}
 
-	cv_overlay_unmultiplied_alpha = !!( flags & GAMESCOPE_CONTROL_LOOK_FLAGS_LAYER_COMPOSITION_UNPREMULTIPLIED );
+	cv_overlay_unmultiplied_alpha = bRaisesBlackLevelFloor;
 	g_ColorMgmtLooks[ EOTF_Gamma22 ] = pG22LUT;
 	g_ColorMgmtLooks[ EOTF_PQ ] = pPQLUT;
 	g_ColorMgmt.pending.externalDirtyCtr++;

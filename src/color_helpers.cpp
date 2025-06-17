@@ -127,7 +127,12 @@ colormapping_t lerp( const colormapping_t & a, const colormapping_t & b, float t
     return result;
 }
 
-std::shared_ptr<lut3d_t> LoadCubeLut( FILE *pFile )
+inline bool close_enough(float a, float b, float epsilon = 0.001f)
+{
+	return fabsf(a - b) <= epsilon;
+}
+
+std::shared_ptr<lut3d_t> LoadCubeLut( FILE *pFile, bool &bRaisesBlackLevelFloor )
 {
     // R changes fastest
     // ...
@@ -135,7 +140,10 @@ std::shared_ptr<lut3d_t> LoadCubeLut( FILE *pFile )
     // %f %f %f
     // ...
 
+    bRaisesBlackLevelFloor = false;
     std::shared_ptr<lut3d_t> lut3d = std::make_shared<lut3d_t>();
+
+    glm::vec3 blackFloor = glm::vec3{ 0.0f, 0.0f, 0.0f };
 
     char line[2048];
     while ( fgets( line, sizeof( line ), pFile ) )
@@ -145,6 +153,10 @@ std::shared_ptr<lut3d_t> LoadCubeLut( FILE *pFile )
             glm::vec3 val;
             if ( sscanf( line, "%f %f %f", &val.r, &val.g, &val.b ) == 3 )
             {
+                if ( lut3d->data.empty() )
+                {
+                    blackFloor = val;
+                }
                 lut3d->data.push_back( val );
             }
         }
@@ -165,16 +177,19 @@ std::shared_ptr<lut3d_t> LoadCubeLut( FILE *pFile )
         return nullptr;
     }
 
+    bRaisesBlackLevelFloor = !close_enough(blackFloor.x, 0.0f) || !close_enough(blackFloor.y, 0.0f) || !close_enough(blackFloor.z, 0.0f);
     return lut3d;
 }
 
-std::shared_ptr<lut3d_t> LoadCubeLut( const char *pchFileName )
+std::shared_ptr<lut3d_t> LoadCubeLut( const char *pchFileName, bool &bRaisesBlackLevelFloor )
 {
+    bRaisesBlackLevelFloor = false;
+    
     FILE *pFile = fopen( pchFileName, "r" );
     if ( !pFile )
         return nullptr;
 
-    return LoadCubeLut( pFile );
+    return LoadCubeLut( pFile, bRaisesBlackLevelFloor );
 }
 
 int GetLut3DIndexRedFastRGB(int indexR, int indexG, int indexB, int dim)

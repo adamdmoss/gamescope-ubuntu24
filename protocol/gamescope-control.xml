@@ -117,7 +117,7 @@
     </request>
 
     <enum name="look_flags" bitfield="true" since="5">
-      <entry name="layer_composition_unpremultiplied" value="0x1" summary="Signifies that the input layers should be assumed to be unpremultiplied alphas, instead of traditional premultiplied values. This is useful when looks that dramatically move the black-point are enabled (such as 'invert'), as it preserves transparent regions."/>
+      <entry name="dummy" value="0x1"/>
     </enum>
 
     <request name="set_look" since="5">
