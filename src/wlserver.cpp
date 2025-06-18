@@ -1171,15 +1171,6 @@ static void gamescope_control_set_look( struct wl_client *client, struct wl_reso
 		pq_fd = -1;
 	}
 
-	if ( !pG22LUT && !pPQLUT )
-	{
-		cv_overlay_unmultiplied_alpha = false;
-		g_ColorMgmtLooks[ EOTF_Gamma22 ] = nullptr;
-		g_ColorMgmtLooks[ EOTF_PQ ] = nullptr;
-		g_ColorMgmt.pending.externalDirtyCtr++;
-		hasRepaint = true;
-	}
-
 	cv_overlay_unmultiplied_alpha = bRaisesBlackLevelFloor;
 	g_ColorMgmtLooks[ EOTF_Gamma22 ] = pG22LUT;
 	g_ColorMgmtLooks[ EOTF_PQ ] = pPQLUT;
